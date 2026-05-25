@@ -75,6 +75,7 @@ int main() {
     static int checkbox_b = 1;
     static char textbox_buf[128] = "edit me";
     static bool quit_requested = false;
+    static int show_part2_label = 0;
 
     mu_begin(ctx);
 
@@ -98,6 +99,24 @@ int main() {
       mu_layout_row(ctx, 1, w1, 0);
       mu_checkbox(ctx, "mu_checkbox A (off)", &checkbox_a);
       mu_checkbox(ctx, "mu_checkbox B (on)", &checkbox_b);
+
+      // Part 2: custom interactive widget
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_checkbox(ctx, "Show Part 2 label", &show_part2_label);
+
+    if (show_part2_label) {
+      mu_Color old_text_color = ctx->style->colors[MU_COLOR_TEXT];
+
+      ctx->style->colors[MU_COLOR_TEXT] = mu_color(255, 220, 80, 255);
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, "Part 2 label is now visible");
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, "Mission accomplished!");
+
+      ctx->style->colors[MU_COLOR_TEXT] = old_text_color;
+    }
 
       // textbox
       mu_layout_row(ctx, 1, w1, 0);
@@ -206,3 +225,4 @@ int main() {
   free(ctx);
   return 0;
 }
+// powershell -ExecutionPolicy Bypass -File .\build_and_run.ps1
