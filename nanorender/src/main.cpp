@@ -149,17 +149,11 @@ int main() {
       mu_checkbox(ctx, "Show Part 2 label", &show_part2_label);
 
     if (show_part2_label) {
-      mu_Color old_text_color = ctx->style->colors[MU_COLOR_TEXT];
-
-      ctx->style->colors[MU_COLOR_TEXT] = mu_color(255, 220, 80, 255);
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Part 2 label is now visible", mu_color(255, 220, 80, 255));
 
       mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "Part 2 label is now visible");
-
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "Mission accomplished!");
-
-      ctx->style->colors[MU_COLOR_TEXT] = old_text_color;
+      colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));
     }
 
       // textbox

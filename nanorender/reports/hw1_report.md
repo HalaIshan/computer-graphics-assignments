@@ -105,6 +105,9 @@ This demonstrates Immediate Mode UI because the widget is declared every frame, 
   </tr>
 </table>
 
+**Implementation note:**  
+I used the `colored_label` helper function for the custom Part 3 label. This keeps the code cleaner because the helper temporarily changes the text color, draws the label, and restores the original text color afterward. I later reused the same helper for the Part 2 instruction labels.
+
 ---
 
 ## Part 3: The Real-Time Graphics Loop and Input Handling
