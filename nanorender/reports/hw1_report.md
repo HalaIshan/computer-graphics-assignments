@@ -104,3 +104,51 @@ This demonstrates Immediate Mode UI because the widget is declared every frame, 
     <td><img src="../assets/part2_img2.png" width="420"></td>
   </tr>
 </table>
+
+---
+
+## Part 3: The Real-Time Graphics Loop and Input Handling
+
+For this part, I intercepted the keyboard input pipeline to create custom visual effects while the application is running.
+
+The program already runs inside a real-time event loop, where the framebuffer is redrawn every frame. I used the character input callback, `mfb_set_char_input_callback`, to catch specific key presses before they are passed to the normal UI text input.
+
+I added two keyboard shortcuts:
+
+- Pressing `P` switches the background between the concentric circles pattern from Part 1 and a checkerboard pattern.
+- Pressing `I` toggles color inversion for the current background pattern.
+
+To control these effects, I added two application state variables:
+
+```cpp
+static bool g_checkerboard_mode = false;
+static bool g_invert_colors = false;
+```
+
+Inside the callback, the shortcut keys update these variables:
+
+```cpp
+if (c == 'p' || c == 'P') {
+  g_checkerboard_mode = !g_checkerboard_mode;
+  return;
+}
+
+if (c == 'i' || c == 'I') {
+  g_invert_colors = !g_invert_colors;
+  return;
+}
+```
+
+I used `return` after handling these keys because they are application shortcuts. This means that `P` and `I` are consumed by the application and are not passed to the regular UI text input. All other characters still continue normally to `ui_bridge_char_input`, so the existing UI widgets can keep working.
+
+The visual change happens immediately because the rendering loop checks these state variables every frame. If `g_checkerboard_mode` is enabled, the framebuffer draws a checkerboard pattern. Otherwise, it draws the concentric circles pattern. If `g_invert_colors` is enabled, the final RGB values are inverted before writing the pixel to the framebuffer.
+
+### Demo
+
+![Part 3 demo](../assets/part3_demo.gif)
+
+### Note
+
+I also added a short instruction label inside the UI window so the user can understand the available keyboard controls directly from the application.
+
+<img src="../assets/part3_label_showing.png" width="300">

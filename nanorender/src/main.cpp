@@ -13,6 +13,17 @@ extern "C" {
 #define HEIGHT 1200
 
 static uint32_t g_buffer[WIDTH * HEIGHT];
+static bool g_checkerboard_mode = false;
+static bool g_invert_colors = false;
+
+static void colored_label(mu_Context *ctx, const char *text, mu_Color color) {
+  mu_Color old_text_color = ctx->style->colors[MU_COLOR_TEXT];
+
+  ctx->style->colors[MU_COLOR_TEXT] = color;
+  mu_label(ctx, text);
+
+  ctx->style->colors[MU_COLOR_TEXT] = old_text_color;
+}
 
 int main() {
   struct mfb_window *window =
@@ -35,6 +46,17 @@ int main() {
   mfb_set_char_input_callback(
       [](struct mfb_window *w, unsigned int c) {
         extern void ui_bridge_char_input(struct mfb_window *, unsigned int);
+
+        if (c == 'p' || c == 'P') {
+          g_checkerboard_mode = !g_checkerboard_mode;
+          return; // consume the shortcut key
+        }
+
+        if (c == 'i' || c == 'I') {
+          g_invert_colors = !g_invert_colors;
+          return; // consume the shortcut key
+        }
+
         ui_bridge_char_input(w, c);
       },
       window);
@@ -48,12 +70,6 @@ int main() {
       int x = i % WIDTH;
       int y = i / WIDTH;
 
-      // Simple gradient background
-      // uint8_t r = (uint8_t)((float)x / WIDTH * 128) + 32;
-      // uint8_t g = (uint8_t)((float)y / HEIGHT * 128) + 32;
-      // uint8_t b = 64;
-
-      // concentric circles pattern
       int center_x = WIDTH / 2;
       int center_y = HEIGHT / 2;
       int dx = x - center_x;
@@ -61,10 +77,28 @@ int main() {
 
       int distance_squared = dx * dx + dy * dy;
 
-      uint8_t r = (uint8_t)((distance_squared / 900) % 256);
-      uint8_t g = (uint8_t)((distance_squared / 500) % 256);
-      uint8_t b = (uint8_t)((distance_squared / 300) % 256);
+      uint8_t r;
+      uint8_t g;
+      uint8_t b;
 
+      if (g_checkerboard_mode) {
+        int tile_size = 80;
+        bool checker = ((x / tile_size) + (y / tile_size)) % 2 == 0;
+
+        r = checker ? 230 : 40;
+        g = checker ? 230 : 80;
+        b = checker ? 230 : 160;
+      } else {
+        r = (uint8_t)((distance_squared / 900) % 256);
+        g = (uint8_t)((distance_squared / 500) % 256);
+        b = (uint8_t)((distance_squared / 300) % 256);
+      }
+
+      if (g_invert_colors) {
+        r = 255 - r;
+        g = 255 - g;
+        b = 255 - b;
+      }
       g_buffer[i] = MFB_RGB(r, g, b);
     }
 
@@ -82,6 +116,16 @@ int main() {
     // --- Widgets window ---
     if (mu_begin_window(ctx, "Widgets", mu_rect(20, 20, 360, 540))) {
       int w1[] = {-1};
+
+      // Part 3: keyboard controls explanation
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Part 3 keyboard controls:", mu_color(100, 200, 255, 255));
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "P: switch circles/checkerboard", mu_color(100, 200, 255, 255));
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "I: invert background colors", mu_color(100, 200, 255, 255));
 
       // label / text
       mu_layout_row(ctx, 1, w1, 0);
