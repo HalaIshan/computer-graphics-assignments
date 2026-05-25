@@ -45,12 +45,26 @@ int main() {
 
     // 2. Scene Rendering (Background)
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
-      // Simple gradient background
       int x = i % WIDTH;
       int y = i / WIDTH;
-      uint8_t r = (uint8_t)((float)x / WIDTH * 128) + 32;
-      uint8_t g = (uint8_t)((float)y / HEIGHT * 128) + 32;
-      uint8_t b = 64;
+
+      // Simple gradient background
+      // uint8_t r = (uint8_t)((float)x / WIDTH * 128) + 32;
+      // uint8_t g = (uint8_t)((float)y / HEIGHT * 128) + 32;
+      // uint8_t b = 64;
+
+      // concentric circles pattern
+      int center_x = WIDTH / 2;
+      int center_y = HEIGHT / 2;
+      int dx = x - center_x;
+      int dy = y - center_y;
+
+      int distance_squared = dx * dx + dy * dy;
+
+      uint8_t r = (uint8_t)((distance_squared / 900) % 256);
+      uint8_t g = (uint8_t)((distance_squared / 500) % 256);
+      uint8_t b = (uint8_t)((distance_squared / 300) % 256);
+
       g_buffer[i] = MFB_RGB(r, g, b);
     }
 
