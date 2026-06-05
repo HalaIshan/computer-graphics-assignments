@@ -3,6 +3,9 @@
 #include <string.h>
 #include <algorithm>
 
+static const int UI_VISUAL_OFFSET_X = 300;
+static const int UI_VISUAL_OFFSET_Y = -100;
+
 // Minimal 8x8 bitmap font for ASCII characters 32-126
 // Each byte represents a row of 8 pixels
 static const uint8_t font_8x8[95][8] = {
@@ -122,6 +125,10 @@ void UIRenderer::render(mu_Context* ctx, uint32_t* buffer) {
 
 void UIRenderer::draw_rect(mu_Rect rect, mu_Color color) {
     uint32_t c = to_uint32(color);
+
+    rect.x += UI_VISUAL_OFFSET_X;
+    rect.y += UI_VISUAL_OFFSET_Y;
+
     int x1 = std::max({rect.x, m_clip_rect.x, 0});
     int y1 = std::max({rect.y, m_clip_rect.y, 0});
     int x2 = std::min({rect.x + rect.w, m_clip_rect.x + m_clip_rect.w, m_width});
@@ -134,10 +141,11 @@ void UIRenderer::draw_rect(mu_Rect rect, mu_Color color) {
     }
 }
 
+
 void UIRenderer::draw_text(const char* text, mu_Vec2 pos, mu_Color color) {
     uint32_t c = to_uint32(color);
-    int x = pos.x;
-    int y = pos.y;
+    int x = pos.x + UI_VISUAL_OFFSET_X;
+    int y = pos.y + UI_VISUAL_OFFSET_Y;
     for (const char* p = text; *p; p++) {
         if (*p < 32 || *p > 126) continue;
         const uint8_t* glyph = font_8x8[*p - 32];
@@ -183,8 +191,8 @@ void UIRenderer::draw_icon(int id, mu_Rect rect, mu_Color color) {
     uint32_t c = to_uint32(color);
     // Centre a square drawing area within the rect (max 14x14)
     int sz = std::min({rect.w, rect.h, 14});
-    int cx = rect.x + rect.w / 2;
-    int cy = rect.y + rect.h / 2;
+    int cx = rect.x + rect.w / 2 + UI_VISUAL_OFFSET_X;
+    int cy = rect.y + rect.h / 2 + UI_VISUAL_OFFSET_Y;
     int h  = sz / 2;
 
     switch (id) {

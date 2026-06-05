@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 extern "C" {
 #include "microui.h"
@@ -16,6 +17,11 @@ static uint32_t g_buffer[WIDTH * HEIGHT];
 static bool g_checkerboard_mode = false;
 static bool g_invert_colors = false;
 
+// Part 4 temporary click marker state
+static int g_last_click_x = -1;
+static int g_last_click_y = -1;
+static int g_click_marker_frames = 0;
+
 static void colored_label(mu_Context *ctx, const char *text, mu_Color color) {
   mu_Color old_text_color = ctx->style->colors[MU_COLOR_TEXT];
 
@@ -23,6 +29,31 @@ static void colored_label(mu_Context *ctx, const char *text, mu_Color color) {
   mu_label(ctx, text);
 
   ctx->style->colors[MU_COLOR_TEXT] = old_text_color;
+}
+
+// Temporary debug marker for Part 4 recording.
+// This draws a visible red circle at the last mouse click position.
+static void draw_click_marker() {
+  if (g_click_marker_frames <= 0 || g_last_click_x < 0 || g_last_click_y < 0) {
+    return;
+  }
+
+  int radius = 12;
+
+  for (int dy = -radius; dy <= radius; dy++) {
+    for (int dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy <= radius * radius) {
+        int px = g_last_click_x + dx;
+        int py = g_last_click_y + dy;
+
+        if (px >= 0 && px < WIDTH && py >= 0 && py < HEIGHT) {
+          g_buffer[py * WIDTH + px] = MFB_RGB(255, 0, 0);
+        }
+      }
+    }
+  }
+
+  g_click_marker_frames--;
 }
 
 int main() {
@@ -64,6 +95,13 @@ int main() {
   while (mfb_update_events(window) != MFB_STATE_EXIT) {
     // 1. Input
     ui_bridge_input(ctx, window);
+
+    // Part 4 temporary click marker input
+    if (ctx->mouse_down & MU_MOUSE_LEFT) {
+      g_last_click_x = ctx->mouse_pos.x;
+      g_last_click_y = ctx->mouse_pos.y;
+      g_click_marker_frames = 30;
+    }
 
     // 2. Scene Rendering (Background)
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
@@ -249,6 +287,10 @@ int main() {
 
     // 4. UI Rendering
     renderer.render(ctx, g_buffer);
+
+    // Part 4 temporary debug marker.
+    // Drawn after UI rendering so it appears on top of the UI.
+    draw_click_marker();
 
     // 5. Display
     mfb_update_state state = mfb_update_ex(window, g_buffer, WIDTH, HEIGHT);
