@@ -96,6 +96,12 @@ int main() {
     // 1. Input
     ui_bridge_input(ctx, window);
 
+    // Temporary input calibration for Part 4 testing.
+    // The visible UI is slightly above the logical click area,
+    // so we shift the mouse position down before MicroUI uses it.
+    static const int UI_INPUT_OFFSET_Y = 40;
+    ctx->mouse_pos.y += UI_INPUT_OFFSET_Y;
+
     // Part 4 temporary click marker input
     if (ctx->mouse_down & MU_MOUSE_LEFT) {
       g_last_click_x = ctx->mouse_pos.x;
@@ -290,7 +296,7 @@ int main() {
 
     // Part 4 temporary debug marker.
     // Drawn after UI rendering so it appears on top of the UI.
-    draw_click_marker();
+    // draw_click_marker();
 
     // 5. Display
     mfb_update_state state = mfb_update_ex(window, g_buffer, WIDTH, HEIGHT);

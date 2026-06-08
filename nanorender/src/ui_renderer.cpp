@@ -3,8 +3,8 @@
 #include <string.h>
 #include <algorithm>
 
-static const int UI_VISUAL_OFFSET_X = 300;
-static const int UI_VISUAL_OFFSET_Y = -100;
+static const int UI_VISUAL_OFFSET_X = 0;
+static const int UI_VISUAL_OFFSET_Y = 0;
 
 // Minimal 8x8 bitmap font for ASCII characters 32-126
 // Each byte represents a row of 8 pixels

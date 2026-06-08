@@ -245,3 +245,33 @@ This experiment shows that MicroUI and `UIRenderer` have different responsibilit
 MicroUI controls the UI logic, layout, and click detection. `UIRenderer` only controls what is drawn on the framebuffer.
 
 Changing the renderer moves the visual output, but it does not automatically move the logical clickable area. This is why the shifted UI and the mouse interaction no longer match.
+
+#### Input Alignment Fix
+
+After finishing the renderer offset experiment, I restored the visual renderer offset back to zero:
+
+```cpp
+static const int UI_VISUAL_OFFSET_X = 0;
+static const int UI_VISUAL_OFFSET_Y = 0;
+```
+
+This returned the UI rectangles, text, and icons to their normal visual positions.
+
+During the earlier tests, I had already noticed that there was still an input mismatch that was not fixed by changing the renderer. After restoring the visual offset to zero, I understood that this remaining problem needed to be corrected from the input side in `main.cpp`, not from `ui_renderer.cpp`.
+
+To fix this, I added a small input correction in `main.cpp` after reading the input:
+
+```cpp
+static const int UI_INPUT_OFFSET_Y = 40;
+ctx->mouse_pos.y += UI_INPUT_OFFSET_Y;
+```
+
+This adjustment moves the mouse input coordinate vertically before MicroUI uses it for hit-testing. After testing different values, `40` gave the best alignment between the visible button and the actual clickable area.
+
+The temporary red click marker was removed/disabled after this fix, because it was only needed for debugging and recording the earlier experiments.
+
+The following demo shows the corrected behavior without the red debug marker:
+
+![Final corrected alignment](../assets/part4_final_corrected_alignment.gif)
+
+This final test shows that the UI is visually back in its normal position, and the clickable area is now better aligned with the visible button.
