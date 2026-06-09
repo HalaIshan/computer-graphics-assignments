@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 
 extern "C" {
 #include "microui.h"
@@ -21,6 +22,12 @@ static bool g_invert_colors = false;
 static int g_last_click_x = -1;
 static int g_last_click_y = -1;
 static int g_click_marker_frames = 0;
+
+// Part 5: application state controlled by UI widgets
+static float part5_tile_size = 80.0f;
+static float part5_color_intensity = 1.0f;
+static int part5_animate_background = 0;
+static int frame_counter = 0;
 
 static void colored_label(mu_Context *ctx, const char *text, mu_Color color) {
   mu_Color old_text_color = ctx->style->colors[MU_COLOR_TEXT];
@@ -96,10 +103,12 @@ int main() {
     // 1. Input
     ui_bridge_input(ctx, window);
 
+    frame_counter++;
+
     // Temporary input calibration for Part 4 testing.
     // The visible UI is slightly above the logical click area,
     // so we shift the mouse position down before MicroUI uses it.
-    static const int UI_INPUT_OFFSET_Y = 40;
+    static const int UI_INPUT_OFFSET_Y = 35;
     ctx->mouse_pos.y += UI_INPUT_OFFSET_Y;
 
     // Part 4 temporary click marker input
@@ -126,16 +135,25 @@ int main() {
       uint8_t b;
 
       if (g_checkerboard_mode) {
-        int tile_size = 80;
-        bool checker = ((x / tile_size) + (y / tile_size)) % 2 == 0;
+        int tile_size = (int)part5_tile_size;
+        if (tile_size < 10) tile_size = 10;
+
+        int animated_shift = part5_animate_background ? frame_counter / 4 : 0;
+        bool checker = (((x + animated_shift) / tile_size) + ((y + animated_shift) / tile_size)) % 2 == 0;
 
         r = checker ? 230 : 40;
         g = checker ? 230 : 80;
         b = checker ? 230 : 160;
       } else {
-        r = (uint8_t)((distance_squared / 900) % 256);
-        g = (uint8_t)((distance_squared / 500) % 256);
-        b = (uint8_t)((distance_squared / 300) % 256);
+        int animation_shift = part5_animate_background ? frame_counter * 20 : 0;
+
+        r = (uint8_t)(((distance_squared / 900) + animation_shift) % 256);
+        g = (uint8_t)(((distance_squared / 500) + animation_shift) % 256);
+        b = (uint8_t)(((distance_squared / 300) + animation_shift) % 256);
+
+        r = (uint8_t)std::min(255.0f, (float)r * part5_color_intensity);
+        g = (uint8_t)std::min(255.0f, (float)g * part5_color_intensity);
+        b = (uint8_t)std::min(255.0f, (float)b * part5_color_intensity);
       }
 
       if (g_invert_colors) {
@@ -170,6 +188,28 @@ int main() {
 
       mu_layout_row(ctx, 1, w1, 0);
       colored_label(ctx, "I: invert background colors", mu_color(100, 200, 255, 255));
+
+      // Part 5: UI controls bound to application state
+      mu_layout_row(ctx, 1, w1, 8);
+      mu_label(ctx, "");
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Part 5 background controls:", mu_color(180, 255, 180, 255));
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, "Checker tile size:");
+      mu_slider(ctx, &part5_tile_size, 20, 160);
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, "Circle color intensity:");
+      mu_slider(ctx, &part5_color_intensity, 0.2f, 2.0f);
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_checkbox(ctx, "Animate background", &part5_animate_background);
+
+      mu_layout_row(ctx, 1, w1, 8);
+      mu_label(ctx, "");
+
 
       // label / text
       mu_layout_row(ctx, 1, w1, 0);
@@ -311,4 +351,5 @@ int main() {
   free(ctx);
   return 0;
 }
+// cd "C:\courses\ComputerGraphics\cg-at-uoh-26-HalaIshan\nanorender"
 // powershell -ExecutionPolicy Bypass -File .\build_and_run.ps1

@@ -262,11 +262,11 @@ During the earlier tests, I had already noticed that there was still an input mi
 To fix this, I added a small input correction in `main.cpp` after reading the input:
 
 ```cpp
-static const int UI_INPUT_OFFSET_Y = 40;
+static const int UI_INPUT_OFFSET_Y = 35;
 ctx->mouse_pos.y += UI_INPUT_OFFSET_Y;
 ```
 
-This adjustment moves the mouse input coordinate vertically before MicroUI uses it for hit-testing. After testing different values, `40` gave the best alignment between the visible button and the actual clickable area.
+This adjustment moves the mouse input coordinate vertically before MicroUI uses it for hit-testing. After testing different values, `35` gave the best alignment between the visible button and the actual clickable area.
 
 The temporary red click marker was removed/disabled after this fix, because it was only needed for debugging and recording the earlier experiments.
 
@@ -275,3 +275,69 @@ The following demo shows the corrected behavior without the red debug marker:
 ![Final corrected alignment](../assets/part4_final_corrected_alignment.gif)
 
 This final test shows that the UI is visually back in its normal position, and the clickable area is now better aligned with the visible button.
+
+
+
+
+---
+### Part 5: Binding UI to Application State
+---
+
+#### Goal
+
+The goal of this part was to bind new MicroUI controls to application state variables, and use those variables to change the background rendering in real time.
+
+#### Idea
+
+For this part, I decided to make the background pattern controllable from the UI itself.
+
+Until now, the background could be changed using keyboard shortcuts from Part 3. In this part, I added new controls inside the MicroUI window so the user can change the background directly with sliders and a checkbox.
+
+I chose three controls:
+
+- A slider for the checkerboard tile size.
+- A slider for the circle color intensity.
+- A checkbox for enabling background animation.
+
+#### Code Changes
+
+I added new application state variables in `main.cpp`:
+
+```cpp
+static float part5_tile_size = 80.0f;
+static float part5_color_intensity = 1.0f;
+static int part5_animate_background = 0;
+static int frame_counter = 0;
+````
+
+Then I added new UI controls inside the MicroUI window:
+
+```cpp
+mu_slider(ctx, &part5_tile_size, 20, 160);
+mu_slider(ctx, &part5_color_intensity, 0.2f, 2.0f);
+mu_checkbox(ctx, "Animate background", &part5_animate_background);
+```
+
+Finally, I used these variables inside the background rendering loop:
+
+* `part5_tile_size` changes the checkerboard tile size.
+* `part5_color_intensity` changes the intensity of the concentric circle colors.
+* `part5_animate_background` enables a simple animation effect using `frame_counter`.
+
+The existing keyboard controls from Part 3 still work:
+
+* `P` switches between circles and checkerboard.
+* `I` inverts the background colors.
+
+#### Result
+
+The following table summarizes the new UI controls and how each one affects the background rendering loop.
+
+| UI control | Application state variable | Effect on background | Demo |
+|---|---|---|---|
+| Tile size slider | `part5_tile_size` | Changes the checkerboard square size. | <img src="../assets/part5_checker_tile_size.gif" width="320"> |
+| Color intensity slider | `part5_color_intensity` | Changes the strength of the concentric circle colors. | <img src="../assets/part5_circle_color_intensity.gif" width="320"> |
+| Animate background checkbox | `part5_animate_background` + `frame_counter` | Animates the concentric circle colors over time. | <img src="../assets/part5_animation_background_circle.gif" width="320"> |
+| Animate background checkbox | `part5_animate_background` + `frame_counter` | Moves the checkerboard pattern over time. | <img src="../assets/part5_animation_background_checker.gif" width="320"> |
+
+These results show that the new MicroUI widgets are directly connected to application state variables. When the user changes a slider or checkbox, the background rendering loop immediately uses the updated value in the next frame.
