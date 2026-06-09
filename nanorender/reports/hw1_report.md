@@ -4,18 +4,21 @@
 **Student ID:** 213692296  
 
 ---
+---
 
 ## Part 1: Manipulating the Framebuffer
 
 ### What was required
 
-Modify the background rendering loop in `main.cpp` by writing new mathematical expressions for `r`, `g`, and `b`.  
-The result must be a visible 2D pattern that uses both `x` and `y`, not a solid color and not a simple horizontal or vertical strip.
+The task was to modify the background rendering loop in `main.cpp` by writing new mathematical expressions for `r`, `g`, and `b`.
+
+The result had to be a visible 2D pattern that uses both `x` and `y`, not a solid color or a simple one-direction pattern.
 
 ### What I did
 
-I replaced the original gradient background with a concentric circles pattern.  
-For each pixel, I used its position relative to the center of the window:
+I replaced the original background with a concentric circles pattern. 
+
+For each pixel, I calculated its position relative to the center of the window:
 
 ```cpp
 int center_x = WIDTH / 2;
@@ -36,11 +39,10 @@ uint8_t b = (uint8_t)((distance_squared / 300) % 256);
 
 g_buffer[i] = MFB_RGB(r, g, b);
 ```
+Because `distance_squared` depends on both `x` and `y`, the result is a 2D circular pattern centered in the window.
 
-Because `distance_squared` depends on both `x` and `y`, the background becomes a 2D circular pattern centered in the window.
 
 ### Result
-
 <table>
   <tr>
     <td align="center"><b>Before</b></td>
@@ -53,9 +55,11 @@ Because `distance_squared` depends on both `x` and `y`, the background becomes a
 </table>
 
 ---
+---
 
 ## Part 2: Immediate Mode UI Declaration
 
+### What I did
 In this part, I added a new interactive MicroUI widget inside the `Widgets` window.
 
 I added a checkbox that controls an external state variable:
@@ -82,7 +86,7 @@ if (show_part2_label) {
   mu_label(ctx, "Part 2 label is now visible");
 
   mu_layout_row(ctx, 1, w1, 0);
-  mu_label(ctx, "mission accomplished!");
+  mu_label(ctx, "Mission accomplished!");
 
   ctx->style->colors[MU_COLOR_TEXT] = old_text_color;
 }
@@ -90,7 +94,7 @@ if (show_part2_label) {
 
 This demonstrates Immediate Mode UI because the widget is declared every frame, while its state is stored in an external application variable.
 
-**Note:** During testing, I noticed that the clickable area of some widgets did not perfectly match their visual position on the screen. The widget still works, but the click position is slightly offset. I kept this observation for the later renderer/input architecture part.
+**Note:** During testing, I noticed a small mismatch between the visual widget position and the clickable area. I kept this observation for the later renderer/input architecture part.
 
 ### Result
 
@@ -105,12 +109,16 @@ This demonstrates Immediate Mode UI because the widget is declared every frame, 
   </tr>
 </table>
 
-**Implementation note:**  
-I used the `colored_label` helper function for the custom Part 3 label. This keeps the code cleaner because the helper temporarily changes the text color, draws the label, and restores the original text color afterward. I later reused the same helper for the Part 2 instruction labels.
 
+
+**Implementation note:**  
+I used a helper function called `colored_label` to temporarily change the text color, draw a label, and then restore the original text color(did it when i did part 3 then reuse it also for part 2). This kept the UI code cleaner and allowed me to reuse the same helper in later parts.
+
+---
 ---
 
 ## Part 3: The Real-Time Graphics Loop and Input Handling
+
 
 For this part, I intercepted the keyboard input pipeline to create custom visual effects while the application is running.
 
@@ -142,7 +150,7 @@ if (c == 'i' || c == 'I') {
 }
 ```
 
-I used `return` after handling these keys because they are application shortcuts. This means that `P` and `I` are consumed by the application and are not passed to the regular UI text input. All other characters still continue normally to `ui_bridge_char_input`, so the existing UI widgets can keep working.
+I used `return` after handling these keys because they are application shortcuts. This consumes `P` and `I`, so they are not passed to normal text input. Other characters still continue to `ui_bridge_char_input`, so regular UI text input remains functional.
 
 The visual change happens immediately because the rendering loop checks these state variables every frame. If `g_checkerboard_mode` is enabled, the framebuffer draws a checkerboard pattern. Otherwise, it draws the concentric circles pattern. If `g_invert_colors` is enabled, the final RGB values are inverted before writing the pixel to the framebuffer.
 
@@ -150,18 +158,18 @@ The visual change happens immediately because the rendering loop checks these st
 
 ![Part 3 demo](../assets/part3_demo.gif)
 
-### Note
-
 I also added a short instruction label inside the UI window so the user can understand the available keyboard controls directly from the application.
 
 <img src="../assets/part3_label_showing.png" width="300">
 
 
 ---
-### Part 4: UI Architecture & The Renderer Bridge
 ---
 
-#### Goal and Initial Observation
+## Part 4: UI Architecture & The Renderer Bridge
+
+
+### Goal and Initial Observation
 
 The goal of this part was to understand the separation between MicroUI's logical UI system and the visual rendering layer.
 
@@ -171,7 +179,7 @@ Because of this, I added a temporary red click marker in `main.cpp`. The goal of
 
 This marker was only a debugging and documentation tool. It is not part of MicroUI, not part of the renderer, and not part of the final UI behavior.
 
-#### Experiment 1: Original Renderer
+### Experiment 1: Original Renderer
 
 First, I tested the original `ui_renderer.cpp`, without adding any visual offset.
 
@@ -179,7 +187,7 @@ First, I tested the original `ui_renderer.cpp`, without adding any visual offset
 
 In this recording, the UI is still drawn in its original position. The red marker helped show the detected click position and made the initial mismatch easier to see.
 
-#### Renderer Code Change
+### Renderer Code Change
 
 After checking the original behavior, I prepared `ui_renderer.cpp` for a controlled visual-offset experiment.
 
@@ -198,10 +206,11 @@ Then, inside `draw_rect`, I applied the offset to the rectangle coordinates befo
 rect.x += UI_VISUAL_OFFSET_X;
 rect.y += UI_VISUAL_OFFSET_Y;
 ```
-Than I applied the same visual offset not only to rectangles, but also to text and icons, so the UI would move as one visual group instead of having only the background rectangles shift.
+
+Then I applied the same visual offset in `draw_text` and `draw_icon`, so the rectangles, labels, and icons moved together as one visual UI group.
 
 
-#### Experiment 2: Offset Mechanism with Offset = 0
+### Experiment 2: Offset Mechanism with Offset = 0
 
 Next, I added offset variables to `ui_renderer.cpp`, but kept them at zero:
 
@@ -214,7 +223,7 @@ static const int UI_VISUAL_OFFSET_Y = 0;
 
 Since the offset is `(0, 0)`, the UI still appears in the same place. This confirmed that adding the offset mechanism alone does not change the rendering unless the offset values are changed.
 
-#### Experiment 3: Large Visual Offset
+### Experiment 3: Large Visual Offset
 
 Finally, I changed the offset to a large value:
 
@@ -236,9 +245,9 @@ Now the UI is drawn in a clearly shifted visual position. However, the clickable
 
 This happens because the offset was applied only inside `UIRenderer`. MicroUI still calculates the widget layout and hit-testing using the original coordinates.
 
-So clicking the shifted visual button is not necessarily the correct place to activate it. The real clickable area remains near the original MicroUI position.
+Therefore, clicking on the shifted visual button does not necessarily activate it. The real clickable area remains near the original MicroUI position.
 
-#### Conclusion
+### Renderer Experiment Conclusion
 
 This experiment shows that MicroUI and `UIRenderer` have different responsibilities.
 
@@ -246,7 +255,7 @@ MicroUI controls the UI logic, layout, and click detection. `UIRenderer` only co
 
 Changing the renderer moves the visual output, but it does not automatically move the logical clickable area. This is why the shifted UI and the mouse interaction no longer match.
 
-#### Input Alignment Fix
+### Input Alignment Fix
 
 After finishing the renderer offset experiment, I restored the visual renderer offset back to zero:
 
@@ -280,14 +289,16 @@ This final test shows that the UI is visually back in its normal position, and t
 
 
 ---
-### Part 5: Binding UI to Application State
 ---
 
-#### Goal
+## Part 5: Binding UI to Application State
+
+
+### Goal
 
 The goal of this part was to bind new MicroUI controls to application state variables, and use those variables to change the background rendering in real time.
 
-#### Idea
+### Idea
 
 For this part, I decided to make the background pattern controllable from the UI itself.
 
@@ -299,7 +310,7 @@ I chose three controls:
 - A slider for the circle color intensity.
 - A checkbox for enabling background animation.
 
-#### Code Changes
+### Code Changes
 
 I added new application state variables in `main.cpp`:
 
@@ -308,7 +319,7 @@ static float part5_tile_size = 80.0f;
 static float part5_color_intensity = 1.0f;
 static int part5_animate_background = 0;
 static int frame_counter = 0;
-````
+```
 
 Then I added new UI controls inside the MicroUI window:
 
@@ -329,7 +340,7 @@ The existing keyboard controls from Part 3 still work:
 * `P` switches between circles and checkerboard.
 * `I` inverts the background colors.
 
-#### Result
+### Result
 
 The following table summarizes the new UI controls and how each one affects the background rendering loop.
 
@@ -340,4 +351,4 @@ The following table summarizes the new UI controls and how each one affects the 
 | Animate background checkbox | `part5_animate_background` + `frame_counter` | Animates the concentric circle colors over time. | <img src="../assets/part5_animation_background_circle.gif" width="320"> |
 | Animate background checkbox | `part5_animate_background` + `frame_counter` | Moves the checkerboard pattern over time. | <img src="../assets/part5_animation_background_checker.gif" width="320"> |
 
-These results show that the new MicroUI widgets are directly connected to application state variables. When the user changes a slider or checkbox, the background rendering loop immediately uses the updated value in the next frame.
+These results show that the new MicroUI widgets directly update application state variables, and the background rendering loop uses the updated values immediately in the next frame.
