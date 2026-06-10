@@ -352,3 +352,88 @@ The following table summarizes the new UI controls and how each one affects the 
 | Animate background checkbox | `part5_animate_background` + `frame_counter` | Moves the checkerboard pattern over time. | <img src="../assets/part5_animation_background_checker.gif" width="320"> |
 
 These results show that the new MicroUI widgets directly update application state variables, and the background rendering loop uses the updated values immediately in the next frame.
+
+---
+
+---
+
+## Part 6: Interactive Line Drawing App
+
+### 6.1 Write the Line Function
+
+#### Goal
+
+The goal of this step was to implement a Bresenham line drawing function that draws a line between two points directly on `g_buffer`.
+
+#### What I did
+
+I added a helper function called `draw_pixel`.  
+It checks that the pixel is inside the window boundaries, and then writes the color to the correct 1D index in the framebuffer.
+
+```cpp
+static void draw_pixel(int x, int y, uint32_t color) {
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+    return;
+  }
+
+  g_buffer[y * WIDTH + x] = color;
+}
+```
+
+Then I added the `draw_line` function.  
+It uses integer calculations and supports different slopes and directions without writing a separate case for each one.
+
+```cpp
+static void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
+  int dx = abs(x1 - x0);
+  int sx = x0 < x1 ? 1 : -1;
+
+  int dy = -abs(y1 - y0);
+  int sy = y0 < y1 ? 1 : -1;
+
+  int error = dx + dy;
+
+  while (true) {
+    draw_pixel(x0, y0, color);
+
+    if (x0 == x1 && y0 == y1) {
+      break;
+    }
+
+    int e2 = 2 * error;
+
+    if (e2 >= dy) {
+      error += dy;
+      x0 += sx;
+    }
+
+    if (e2 <= dx) {
+      error += dx;
+      y0 += sy;
+    }
+  }
+}
+```
+
+#### Testing
+
+To test the function, I added temporary hardcoded lines after drawing the background and before rendering the UI.  
+I used six examples to check different cases: horizontal, vertical, shallow slope, steep slope, reverse direction, and reverse diagonal.
+
+For example:
+
+```cpp
+draw_line(520, 420, 1120, 420, MFB_RGB(255, 255, 255)); // horizontal line
+draw_line(600, 1000, 850, 480, MFB_RGB(255, 255, 0));   // steep slope line
+```
+
+#### Result
+
+The test lines appeared correctly on top of the background.  
+This shows that the function works for different slopes and directions.
+
+The diagonal lines look slightly stair-stepped because the screen is a discrete pixel grid, which is expected in raster line drawing.
+
+<img src="../assets/part6_bresenham_test_lines.png" width="600">
+
+---

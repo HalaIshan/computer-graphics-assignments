@@ -62,6 +62,43 @@ static void draw_click_marker() {
 
   g_click_marker_frames--;
 }
+static void draw_pixel(int x, int y, uint32_t color) {
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+    return;
+  }
+
+  g_buffer[y * WIDTH + x] = color;
+}
+
+static void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
+  int dx = abs(x1 - x0);
+  int sx = x0 < x1 ? 1 : -1;
+
+  int dy = -abs(y1 - y0);
+  int sy = y0 < y1 ? 1 : -1;
+
+  int error = dx + dy;
+
+  while (true) {
+    draw_pixel(x0, y0, color);
+
+    if (x0 == x1 && y0 == y1) {
+      break;
+    }
+
+    int e2 = 2 * error;
+
+    if (e2 >= dy) {
+      error += dy;
+      x0 += sx;
+    }
+
+    if (e2 <= dx) {
+      error += dx;
+      y0 += sy;
+    }
+  }
+}
 
 int main() {
   struct mfb_window *window =
@@ -330,6 +367,16 @@ int main() {
       mfb_close(window);
       break;
     }
+
+    // Part 6: hardcoded test lines for Bresenham's line algorithm
+    draw_line(520, 420, 1120, 420, MFB_RGB(255, 255, 255)); // horizontal line
+    draw_line(520, 450, 520, 950, MFB_RGB(255, 0, 0));      // vertical line
+
+    draw_line(560, 500, 1150, 700, MFB_RGB(0, 255, 0));     // shallow slope line
+    draw_line(600, 1000, 850, 480, MFB_RGB(255, 255, 0));   // steep slope line
+
+    draw_line(1180, 800, 650, 550, MFB_RGB(0, 180, 255));   // reverse direction line
+    draw_line(1180, 1000, 700, 620, MFB_RGB(255, 0, 255));  // reverse diagonal line
 
     // 4. UI Rendering
     renderer.render(ctx, g_buffer);
