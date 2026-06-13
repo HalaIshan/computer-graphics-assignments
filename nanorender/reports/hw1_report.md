@@ -504,3 +504,93 @@ After releasing the mouse button, the line becomes permanent and is redrawn in w
 <img src="../assets/part6_interactive_line_drawing.gif" width="600">
 
 ---
+
+### 6.3 The Creative Canvas
+
+#### Goal
+
+The goal of this final step was to combine the previous parts into a more useful interactive drawing tool.
+
+#### Idea
+
+For the creative canvas, I extended the line drawing tool from Part 6.2.
+
+Instead of drawing all lines with one fixed color, I added UI controls that allow the user to choose the current line color.  
+I also added a clear button so the user can remove all saved lines from the canvas.
+
+The final tool includes:
+
+- RGB sliders for controlling the current line color.
+- A live preview line using the selected color.
+- Permanent saved lines.
+- A `Clear canvas` button.
+
+#### Code Changes
+
+I added three UI sliders for the red, green, and blue values of the current line color.
+
+These values are used when drawing the temporary preview line and also when saving the final line.  
+This means the user can choose a color, draw a line, then change the color and draw another line.
+
+I also added a `Clear canvas` button.  
+When the button is clicked, the list of saved lines is cleared, and the canvas becomes empty again.
+
+To keep the interface cleaner, I placed the Creative Canvas controls in their own separate window.  
+This made the drawing controls easier to use and separated them from the older widgets window.
+
+#### Result
+
+The final version works as an interactive creative canvas.
+
+The user can draw multiple permanent lines, choose different colors using the RGB sliders, and clear the canvas when needed.
+
+The following image shows lines drawn with different selected colors:
+
+<img src="../assets/part6_3_diffrent_colors_lines.png" width="600">
+
+The following demo shows the line color changing using the RGB sliders:
+
+<img src="../assets/part6_3_changing_line_color.gif" width="600">
+
+The following demo shows the clear canvas button removing the saved lines:
+
+<img src="../assets/part6_3_clear_canvas.gif" width="600">
+
+---
+
+## Development Notes
+
+During the assignment, most parts worked after testing and small adjustments.  
+The main difficulty I faced was the input alignment between the visible UI controls and the actual mouse click position.
+
+This issue first appeared as a small observation in Part 2, when the checkbox click area did not perfectly match the visible widget position.  
+Later, in Part 4, I investigated the problem more directly by adding a temporary click marker and testing visual renderer offsets.
+
+This helped me understand that MicroUI handles the input logic and widget hit-testing, while the renderer only draws the UI on the framebuffer.  
+Because of that, moving the visual UI in the renderer did not automatically move the clickable area.
+
+A similar issue appeared again in Part 6 when I added more controls for the Creative Canvas.  
+Some controls worked correctly, but when I placed too many controls lower in the same window, the click position became less accurate.
+
+I tried a few layouts before choosing the final arrangement.  
+At first, I placed the Creative Canvas controls inside the same long window. Then I tested moving them into their own separate window and adjusted the drawing area so clicking on UI controls would not start drawing lines.
+
+The final solution was to keep the Creative Canvas controls in a separate UI window near the main controls, and to keep the drawing area separate from the UI area.  
+This made the interface cleaner and made the drawing tool easier to use.
+
+---
+
+## Final Assignment Conclusion
+
+This assignment showed me that interactive graphics programming is not only about drawing pixels, but also about managing the connection between input, state, and visual output.
+
+The most important lesson was that the visual result and the logical interaction are not always the same thing.  
+A UI element can appear in one place, while its clickable area is calculated somewhere else if the coordinate handling is not consistent. This became clear during the input alignment work.
+
+I also learned that building a real-time tool requires testing small changes continuously.  
+Each frame redraws the screen, so any permanent result must be stored in application state and drawn again every frame.
+
+By the end of the assignment, the project became more than a static graphics demo.  
+It became an interactive canvas where the user can control the background, choose line colors, draw permanent lines, preview changes while interacting, and clear the result.
+
+Overall, this assignment helped me better understand how framebuffer rendering, UI logic, input handling, and application state work together in one real-time graphics application.

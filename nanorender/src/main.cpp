@@ -47,6 +47,17 @@ static int g_line_current_x = 0;
 static int g_line_current_y = 0;
 static bool g_previous_left_down = false;
 
+// Part 6.3: current drawing color controlled by UI
+static float g_line_color_r = 255.0f;
+static float g_line_color_g = 255.0f;
+static float g_line_color_b = 255.0f;
+
+static uint32_t get_current_line_color() {
+  return MFB_RGB((uint8_t)g_line_color_r,
+                 (uint8_t)g_line_color_g,
+                 (uint8_t)g_line_color_b);
+}
+
 static bool is_inside_drawing_area(int x, int y) {
   return x > 420 && x < WIDTH && y > 0 && y < HEIGHT;
 }
@@ -81,7 +92,7 @@ static void update_line_drawing(mu_Context *ctx) {
     line.y0 = g_line_start_y;
     line.x1 = mouse_x;
     line.y1 = mouse_y;
-    line.color = MFB_RGB(255, 255, 255);
+    line.color = get_current_line_color();
 
     g_drawn_lines.push_back(line);
     g_is_drawing_line = false;
@@ -206,8 +217,11 @@ int main() {
     // Temporary input calibration for Part 4 testing.
     // The visible UI is slightly above the logical click area,
     // so we shift the mouse position down before MicroUI uses it.
+    int raw_mouse_y = ctx->mouse_pos.y;
+
     static const int UI_INPUT_OFFSET_Y = 35;
-    ctx->mouse_pos.y += UI_INPUT_OFFSET_Y;
+    ctx->mouse_pos.y = raw_mouse_y + UI_INPUT_OFFSET_Y;
+
     update_line_drawing(ctx);
 
     // Part 4 temporary click marker input
@@ -264,18 +278,18 @@ int main() {
     }
 
     // 3. UI Logic
-    static float slider_val = 50.0f;
-    static float number_val = 3.14f;
-    static int checkbox_a = 0;
-    static int checkbox_b = 1;
-    static char textbox_buf[128] = "edit me";
+    // static float slider_val = 50.0f;
+    // static float number_val = 3.14f;
+    // static int checkbox_a = 0;
+    // static int checkbox_b = 1;
+    // static char textbox_buf[128] = "edit me";
     static bool quit_requested = false;
     static int show_part2_label = 0;
 
     mu_begin(ctx);
 
     // --- Widgets window ---
-    if (mu_begin_window(ctx, "Widgets", mu_rect(20, 20, 360, 540))) {
+    if (mu_begin_window(ctx, "Widgets", mu_rect(20, 20, 360, 400))){
       int w1[] = {-1};
 
       // Part 3: keyboard controls explanation
@@ -309,74 +323,73 @@ int main() {
       mu_layout_row(ctx, 1, w1, 8);
       mu_label(ctx, "");
 
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Part 6 line drawing:", mu_color(255, 180, 120, 255));
-
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Drag in the empty area to draw a line", mu_color(255, 180, 120, 255));
-
-
       // label / text
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "mu_label: plain static text");
-      mu_text(ctx, "mu_text: word-wrapped longer text that will reflow inside "
-                   "the window width automatically.");
+      // mu_layout_row(ctx, 1, w1, 0);
+      // mu_label(ctx, "mu_label: plain static text");
+      // mu_text(ctx, "mu_text: word-wrapped longer text that will reflow inside "
+      //              "the window width automatically.");
 
       // button
-      mu_layout_row(ctx, 1, w1, 0);
-      if (mu_button(ctx, "mu_button: click me")) {
-        quit_requested = false; // just a reaction
-      }
+      // mu_layout_row(ctx, 1, w1, 0);
+      // if (mu_button(ctx, "mu_button: click me")) {
+      //   quit_requested = false; // just a reaction
+      // }
 
       // checkbox
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_checkbox(ctx, "mu_checkbox A (off)", &checkbox_a);
-      mu_checkbox(ctx, "mu_checkbox B (on)", &checkbox_b);
+      // mu_layout_row(ctx, 1, w1, 0);
+      // mu_checkbox(ctx, "mu_checkbox A (off)", &checkbox_a);
+      // mu_checkbox(ctx, "mu_checkbox B (on)", &checkbox_b);
 
-      // Part 2: custom interactive widget
+            // Part 2: custom interactive widget
+      mu_layout_row(ctx, 1, w1, 8);
+      mu_label(ctx, "");
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Part 2 checkbox demo:", mu_color(255, 220, 80, 255));
+
       mu_layout_row(ctx, 1, w1, 0);
       mu_checkbox(ctx, "Show Part 2 label", &show_part2_label);
 
-    if (show_part2_label) {
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Part 2 label is now visible", mu_color(255, 220, 80, 255));
+      if (show_part2_label) {
+        mu_layout_row(ctx, 1, w1, 0);
+        colored_label(ctx, "Part 2 label is now visible", mu_color(255, 220, 80, 255));
 
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));
-    }
+        mu_layout_row(ctx, 1, w1, 0);
+        colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));
+      }
 
       // textbox
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "mu_textbox:");
-      mu_textbox(ctx, textbox_buf, sizeof(textbox_buf));
+      // mu_layout_row(ctx, 1, w1, 0);
+      // mu_label(ctx, "mu_textbox:");
+      // mu_textbox(ctx, textbox_buf, sizeof(textbox_buf));
 
       // slider
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "mu_slider (0-100):");
-      mu_slider(ctx, &slider_val, 0, 100);
+      // mu_layout_row(ctx, 1, w1, 0);
+      // mu_label(ctx, "mu_slider (0-100):");
+      // mu_slider(ctx, &slider_val, 0, 100);
 
       // number
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "mu_number (step 0.1):");
-      mu_number(ctx, &number_val, 0.1f);
+      // mu_layout_row(ctx, 1, w1, 0);
+      // mu_label(ctx, "mu_number (step 0.1):");
+      // mu_number(ctx, &number_val, 0.1f);
 
       // header (collapsible section)
-      if (mu_header(ctx, "mu_header: collapsible section")) {
-        mu_layout_row(ctx, 1, w1, 0);
-        mu_label(ctx, "Content inside the header.");
-      }
+      // if (mu_header(ctx, "mu_header: collapsible section")) {
+      //   mu_layout_row(ctx, 1, w1, 0);
+      //   mu_label(ctx, "Content inside the header.");
+      // }
 
       // treenode
-      if (mu_begin_treenode(ctx, "mu_treenode: root")) {
-        mu_layout_row(ctx, 1, w1, 0);
-        mu_label(ctx, "child item A");
-        if (mu_begin_treenode(ctx, "nested node")) {
-          mu_layout_row(ctx, 1, w1, 0);
-          mu_label(ctx, "deeply nested item");
-          mu_end_treenode(ctx);
-        }
-        mu_end_treenode(ctx);
-      }
+      // if (mu_begin_treenode(ctx, "mu_treenode: root")) {
+      //   mu_layout_row(ctx, 1, w1, 0);
+      //   mu_label(ctx, "child item A");
+      //   if (mu_begin_treenode(ctx, "nested node")) {
+      //     mu_layout_row(ctx, 1, w1, 0);
+      //     mu_label(ctx, "deeply nested item");
+      //     mu_end_treenode(ctx);
+      //   }
+      //   mu_end_treenode(ctx);
+      // }
 
       // quit button
       mu_layout_row(ctx, 1, w1, 0);
@@ -388,23 +401,68 @@ int main() {
     }
 
     // --- Panel window ---
-    if (mu_begin_window(ctx, "Panel Demo", mu_rect(395, 20, 380, 200))) {
-      int w2[] = {-1};
-      mu_layout_row(ctx, 1, w2, 120);
-      mu_begin_panel(ctx, "scrollable panel");
-      int wp[] = {-1};
-      for (int i = 1; i <= 12; i++) {
-        mu_layout_row(ctx, 1, wp, 0);
-        char line[32];
-        snprintf(line, sizeof(line), "Panel row %d", i);
-        mu_label(ctx, line);
+    // if (mu_begin_window(ctx, "Panel Demo", mu_rect(395, 20, 380, 200))) {
+    //   int w2[] = {-1};
+    //   mu_layout_row(ctx, 1, w2, 120);
+    //   mu_begin_panel(ctx, "scrollable panel");
+    //   int wp[] = {-1};
+    //   for (int i = 1; i <= 12; i++) {
+    //     mu_layout_row(ctx, 1, wp, 0);
+    //     char line[32];
+    //     snprintf(line, sizeof(line), "Panel row %d", i);
+    //     mu_label(ctx, line);
+    //   }
+    //   mu_end_panel(ctx);
+    //   mu_end_window(ctx);
+    // }
+
+    // --- Creative Canvas window ---
+    if (mu_begin_window(ctx, "Creative Canvas", mu_rect(390, 20, 360, 350))) {
+      int wc[] = {-1};
+
+      mu_layout_row(ctx, 1, wc, 0);
+      colored_label(ctx, "Part 6 line drawing:", mu_color(255, 180, 120, 255));
+
+      mu_layout_row(ctx, 1, wc, 0);
+      colored_label(ctx, "Drag in the empty area to draw a line", mu_color(255, 180, 120, 255));
+
+      mu_layout_row(ctx, 1, wc, 8);
+      mu_label(ctx, "");
+
+
+      mu_layout_row(ctx, 1, wc, 0);
+      colored_label(ctx, "Line color controls:", mu_color(255, 180, 120, 255));
+
+      mu_layout_row(ctx, 1, wc, 0);
+      mu_label(ctx, "Line red:");
+      mu_slider(ctx, &g_line_color_r, 0, 255);
+
+      mu_layout_row(ctx, 1, wc, 0);
+      mu_label(ctx, "Line green:");
+      mu_slider(ctx, &g_line_color_g, 0, 255);
+
+      mu_layout_row(ctx, 1, wc, 0);
+      mu_label(ctx, "Line blue:");
+      mu_slider(ctx, &g_line_color_b, 0, 255);
+
+      mu_layout_row(ctx, 1, wc, 0);
+      colored_label(ctx, "Current line color preview",
+                    mu_color((int)g_line_color_r,
+                             (int)g_line_color_g,
+                             (int)g_line_color_b,
+                             255));
+
+      mu_layout_row(ctx, 1, wc, 0);
+      if (mu_button(ctx, "Clear canvas")) {
+        g_drawn_lines.clear();
+        g_is_drawing_line = false;
       }
-      mu_end_panel(ctx);
+
       mu_end_window(ctx);
     }
 
     // --- Popup demo window ---
-    if (mu_begin_window(ctx, "Popup Demo", mu_rect(395, 235, 380, 80))) {
+    if (mu_begin_window(ctx, "Popup Demo", mu_rect(760, 70, 380, 80))) {
       int w3[] = {-1};
       mu_layout_row(ctx, 1, w3, 0);
       if (mu_button(ctx, "Open popup")) {
@@ -455,7 +513,7 @@ int main() {
     if (g_is_drawing_line) {
       draw_line(g_line_start_x, g_line_start_y,
                 g_line_current_x, g_line_current_y,
-                MFB_RGB(255, 255, 0));
+                get_current_line_color());
     }
 
     // 4. UI Rendering
