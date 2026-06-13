@@ -436,4 +436,71 @@ The diagonal lines look slightly stair-stepped because the screen is a discrete 
 
 <img src="../assets/part6_bresenham_test_lines.png" width="600">
 
+
+---
+
+### 6.2 AI-Assisted UX Planning
+
+#### Goal
+
+The goal of this step was to use AI assistance to plan the mouse interaction for the line drawing tool before implementing it in code.
+
+#### Idea
+
+Before writing the code, I used an AI assistant to compare different ways a user could draw a line with the mouse.
+
+The options I considered were:
+
+| Approach | Pros | Cons | State logic |
+|---|---|---|---|
+| Two clicks | Easy to understand. The user clicks start and then clicks end. | The program must remember the first click. The user may not know that the program is waiting for the second click. | Save the first point. On the second click, save the final line. |
+| Drag and release | Feels natural for drawing. The user can see the line while dragging. | Needs temporary state while the mouse is held. The preview line should not be saved every frame. | On press, save the start point. While dragging, update the preview. On release, save the line. |
+| Click, preview, click | The user can preview the line without holding the mouse button. | More complex. The program stays in drawing mode between two clicks. | Save the first point, show preview while moving, and save the line on the second click. |
+
+I chose the drag and release approach.
+
+The interaction works like this:
+
+- Press the left mouse button to start the line.
+- Drag the mouse to preview the line.
+- Release the mouse button to save the final line.
+
+I chose this approach because it is simple, direct, and gives immediate visual feedback while drawing.
+
+#### Code Changes
+
+I implemented the drag-and-release interaction by separating the drawing process into two parts: temporary preview and saved lines.
+
+When the user presses the left mouse button, the program saves the start point.  
+While the user drags the mouse, the program updates the end point and shows a yellow preview line.  
+When the user releases the mouse button, the line is saved as a final line.
+
+The saved lines are redrawn every frame after the background is rendered, because the framebuffer is refreshed each frame.
+
+I also limited drawing to the empty area outside the UI window, so clicking on UI controls does not accidentally create lines.
+
+In the final behavior, the preview line appears in yellow while dragging, and the saved lines appear in white after release.
+
+#### Input Calibration Note
+
+During testing, I noticed that the drawn line did not fully match the visible mouse position.  
+The line appeared slightly above the cursor.
+
+This happened because I already added an input correction in Part 4 for MicroUI click alignment.  
+That correction helped the UI buttons, but the line drawing uses the mouse position to draw directly on `g_buffer`, so it still needed a separate small adjustment.
+
+For this reason, I added another vertical offset only for the line drawing input.
+
+This offset is not part of Bresenham's algorithm.  
+It is only used to align the drawn line with the visible mouse position.
+
+#### Result
+
+The application now supports interactive line drawing with the mouse.
+
+While dragging, the application shows a yellow preview line.  
+After releasing the mouse button, the line becomes permanent and is redrawn in white every frame.
+
+<img src="../assets/part6_interactive_line_drawing.gif" width="600">
+
 ---

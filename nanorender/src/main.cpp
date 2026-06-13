@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <vector>
 
 extern "C" {
 #include "microui.h"
@@ -28,6 +29,66 @@ static float part5_tile_size = 80.0f;
 static float part5_color_intensity = 1.0f;
 static int part5_animate_background = 0;
 static int frame_counter = 0;
+
+struct DrawnLine {
+  int x0;
+  int y0;
+  int x1;
+  int y1;
+  uint32_t color;
+};
+
+static std::vector<DrawnLine> g_drawn_lines;
+
+static bool g_is_drawing_line = false;
+static int g_line_start_x = 0;
+static int g_line_start_y = 0;
+static int g_line_current_x = 0;
+static int g_line_current_y = 0;
+static bool g_previous_left_down = false;
+
+static bool is_inside_drawing_area(int x, int y) {
+  return x > 420 && x < WIDTH && y > 0 && y < HEIGHT;
+}
+
+static void update_line_drawing(mu_Context *ctx) {
+  bool left_down = (ctx->mouse_down & MU_MOUSE_LEFT) != 0;
+
+  static const int LINE_DRAWING_OFFSET_Y = 60;
+
+  int mouse_x = ctx->mouse_pos.x;
+  int mouse_y = ctx->mouse_pos.y + LINE_DRAWING_OFFSET_Y; // Adjust for UI input offset
+
+  bool left_pressed = left_down && !g_previous_left_down;
+  bool left_released = !left_down && g_previous_left_down;
+
+  if (left_pressed && is_inside_drawing_area(mouse_x, mouse_y)) {
+    g_is_drawing_line = true;
+    g_line_start_x = mouse_x;
+    g_line_start_y = mouse_y;
+    g_line_current_x = mouse_x;
+    g_line_current_y = mouse_y;
+  }
+
+  if (g_is_drawing_line && left_down) {
+    g_line_current_x = mouse_x;
+    g_line_current_y = mouse_y;
+  }
+
+  if (g_is_drawing_line && left_released) {
+    DrawnLine line;
+    line.x0 = g_line_start_x;
+    line.y0 = g_line_start_y;
+    line.x1 = mouse_x;
+    line.y1 = mouse_y;
+    line.color = MFB_RGB(255, 255, 255);
+
+    g_drawn_lines.push_back(line);
+    g_is_drawing_line = false;
+  }
+
+  g_previous_left_down = left_down;
+}
 
 static void colored_label(mu_Context *ctx, const char *text, mu_Color color) {
   mu_Color old_text_color = ctx->style->colors[MU_COLOR_TEXT];
@@ -147,6 +208,7 @@ int main() {
     // so we shift the mouse position down before MicroUI uses it.
     static const int UI_INPUT_OFFSET_Y = 35;
     ctx->mouse_pos.y += UI_INPUT_OFFSET_Y;
+    update_line_drawing(ctx);
 
     // Part 4 temporary click marker input
     if (ctx->mouse_down & MU_MOUSE_LEFT) {
@@ -246,6 +308,12 @@ int main() {
 
       mu_layout_row(ctx, 1, w1, 8);
       mu_label(ctx, "");
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Part 6 line drawing:", mu_color(255, 180, 120, 255));
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Drag in the empty area to draw a line", mu_color(255, 180, 120, 255));
 
 
       // label / text
@@ -369,14 +437,26 @@ int main() {
     }
 
     // Part 6: hardcoded test lines for Bresenham's line algorithm
-    draw_line(520, 420, 1120, 420, MFB_RGB(255, 255, 255)); // horizontal line
-    draw_line(520, 450, 520, 950, MFB_RGB(255, 0, 0));      // vertical line
+    // draw_line(520, 420, 1120, 420, MFB_RGB(255, 255, 255)); // horizontal line
+    // draw_line(520, 450, 520, 950, MFB_RGB(255, 0, 0));      // vertical line
 
-    draw_line(560, 500, 1150, 700, MFB_RGB(0, 255, 0));     // shallow slope line
-    draw_line(600, 1000, 850, 480, MFB_RGB(255, 255, 0));   // steep slope line
+    // draw_line(560, 500, 1150, 700, MFB_RGB(0, 255, 0));     // shallow slope line
+    // draw_line(600, 1000, 850, 480, MFB_RGB(255, 255, 0));   // steep slope line
 
-    draw_line(1180, 800, 650, 550, MFB_RGB(0, 180, 255));   // reverse direction line
-    draw_line(1180, 1000, 700, 620, MFB_RGB(255, 0, 255));  // reverse diagonal line
+    // draw_line(1180, 800, 650, 550, MFB_RGB(0, 180, 255));   // reverse direction line
+    // draw_line(1180, 1000, 700, 620, MFB_RGB(255, 0, 255));  // reverse diagonal line
+
+    // Part 6: draw saved lines
+    for (const DrawnLine &line : g_drawn_lines) {
+      draw_line(line.x0, line.y0, line.x1, line.y1, line.color);
+    }
+
+    // Part 6: draw temporary preview line while dragging
+    if (g_is_drawing_line) {
+      draw_line(g_line_start_x, g_line_start_y,
+                g_line_current_x, g_line_current_y,
+                MFB_RGB(255, 255, 0));
+    }
 
     // 4. UI Rendering
     renderer.render(ctx, g_buffer);
