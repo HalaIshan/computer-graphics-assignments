@@ -597,26 +597,61 @@ In hindsight, it would have been better to make these UI cleanup improvements gr
 
 - The slider values are not reset when switching between background modes. This keeps the last selected values saved and makes the controls feel more consistent.
 
-
+- I prevented line drawing from starting when the first mouse press happens on top of a UI window. If the line starts on the background, the user can still drag the line across UI windows normally. This keeps the drawing behavior natural while preventing accidental lines when interacting with the UI.
 
 ### Result
 
-The interface is now easier to manage.
+The cleanup changes made the interface easier to use and reduced accidental interactions while drawing.
 
-The main control windows can be closed or moved, and I can bring them back using the `Window Controls` panel. This gives more free space for drawing while still keeping the controls accessible.
+The following demos summarize the final behavior after the improvements.
 
-<img src="../assets/hw1_ui_cleanup_window_controls.gif" width="700">
+<table>
+  <tr>
+    <td align="center"><b>Window controls</b></td>
+    <td align="center"><b>Context-aware background controls</b></td>
+  </tr>
+  <tr>
+    <td>
+      This demo shows that the main control windows can be closed, moved, and restored using the `Window Controls` panel.
+    </td>
+    <td>
+      This demo shows that the visible background slider changes according to the active background mode.
+      In circles mode, the UI shows `Circle color intensity`.
+      In checkerboard mode, the UI shows `Checker tile size`.
+    </td>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw1_ui_cleanup_window_controls.gif" width="350"></td>
+    <td><img src="../assets/hw1_context_aware_background_controls.gif" width="350"></td>
+  </tr>
+</table>
 
-The following demo shows the context-aware background controls:
-
-<img src="../assets/hw1_context_aware_background_controls.gif" width="700">
-
+<table>
+  <tr>
+    <td align="center"><b>Before line drawing fix</b></td>
+    <td align="center"><b>After line drawing fix</b></td>
+  </tr>
+  <tr>
+    <td>
+      Before the fix, starting a drag on top of a UI window could accidentally create a line.
+    </td>
+    <td>
+      After the fix, drawing only starts if the first mouse press begins on the background.
+      If the line already started on the background, it can still pass over UI windows while dragging.
+    </td>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw1_line_start_over_ui_before.gif" width="350"></td>
+    <td><img src="../assets/hw1_line_start_over_ui_after.gif" width="350"></td>
+  </tr>
+</table>
 
 ### Current status and next improvements
 
-The cleanup is working, but there are still a few smaller interaction improvements I want to continue later:
+The cleanup is working well, and the main interaction issues are now improved.
 
-- Prevent line drawing from starting when clicking or dragging on top of UI windows.
+The remaining improvement I still want to continue later is:
+
 - Keep the `Window Controls` panel inside the visible window bounds, so it always remains reachable after dragging.
 
 I also noticed that if future assignments add more UI windows, screen space may become harder to manage. For the current version, I kept the windows open by default because this is simpler and more useful while the number of windows is still small. If later assignments require more windows or more groups of controls, I can organize them into separate panels and use the `Window Controls` panel to show or reset only the needed group.
@@ -658,4 +693,4 @@ Because the framebuffer is redrawn every frame, anything that should remain visi
 
 The current version of the project works as an interactive drawing canvas with background controls, line color controls, saved lines, preview drawing, and window management controls.
 
-I still plan to continue improving the UI behavior, especially preventing line drawing while interacting with UI windows and making some background controls more context-aware.
+I still plan to continue improving the UI behavior, especially keeping the always-available control panel inside the visible window bounds and organizing the project assets more clearly.

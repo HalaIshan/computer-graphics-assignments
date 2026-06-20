@@ -54,6 +54,17 @@ static float g_line_color_r = 255.0f;
 static float g_line_color_g = 255.0f;
 static float g_line_color_b = 255.0f;
 
+// Cached UI window positions.
+// These values start with the default window positions,
+// then get updated every frame after MicroUI builds the UI.
+static mu_Rect g_widgets_window_rect = {20, 20, 360, 800};
+static mu_Rect g_canvas_window_rect = {390, 20, 360, 450};
+static mu_Rect g_window_controls_rect = {860, 20, 260, 150};
+
+static bool g_widgets_window_open = true;
+static bool g_canvas_window_open = true;
+static bool g_window_controls_open = true;
+
 static uint32_t get_current_line_color() {
   return MFB_RGB((uint8_t)g_line_color_r,
                  (uint8_t)g_line_color_g,
@@ -62,6 +73,32 @@ static uint32_t get_current_line_color() {
 
 static bool is_inside_drawing_area(int x, int y) {
   return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
+}
+
+static bool point_inside_rect(int x, int y, mu_Rect rect) {
+  return x >= rect.x &&
+         x < rect.x + rect.w &&
+         y >= rect.y &&
+         y < rect.y + rect.h;
+}
+
+static bool is_mouse_over_ui_window(int x, int y) {
+  if (g_widgets_window_open &&
+      point_inside_rect(x, y, g_widgets_window_rect)) {
+    return true;
+  }
+
+  if (g_canvas_window_open &&
+      point_inside_rect(x, y, g_canvas_window_rect)) {
+    return true;
+  }
+
+  if (g_window_controls_open &&
+      point_inside_rect(x, y, g_window_controls_rect)) {
+    return true;
+  }
+
+  return false;
 }
 
 static void update_line_drawing(mu_Context *ctx) {
@@ -75,7 +112,9 @@ static void update_line_drawing(mu_Context *ctx) {
   bool left_pressed = left_down && !g_previous_left_down;
   bool left_released = !left_down && g_previous_left_down;
 
-  if (left_pressed && is_inside_drawing_area(mouse_x, mouse_y)) {
+  bool mouse_over_ui = is_mouse_over_ui_window(mouse_x, mouse_y);
+
+  if (left_pressed && is_inside_drawing_area(mouse_x, mouse_y) && !mouse_over_ui) {
     g_is_drawing_line = true;
     g_line_start_x = mouse_x;
     g_line_start_y = mouse_y;
@@ -487,6 +526,19 @@ int main() {
 
       mu_end_window(ctx);
     }
+
+    // Update cached UI window positions after MicroUI builds the windows.
+    mu_Container *widgets_state = mu_get_container(ctx, "Widgets");
+    g_widgets_window_rect = widgets_state->rect;
+    g_widgets_window_open = widgets_state->open;
+
+    mu_Container *canvas_state = mu_get_container(ctx, "Creative Canvas");
+    g_canvas_window_rect = canvas_state->rect;
+    g_canvas_window_open = canvas_state->open;
+
+    mu_Container *controls_state = mu_get_container(ctx, "Window Controls");
+    g_window_controls_rect = controls_state->rect;
+    g_window_controls_open = controls_state->open;
 
     mu_end(ctx);
 
