@@ -71,6 +71,30 @@ static uint32_t get_current_line_color() {
                  (uint8_t)g_line_color_b);
 }
 
+static int clamp_int(int value, int min_value, int max_value) {
+  if (max_value < min_value) {
+    return min_value;
+  }
+
+  if (value < min_value) {
+    return min_value;
+  }
+
+  if (value > max_value) {
+    return max_value;
+  }
+
+  return value;
+}
+
+static void clamp_rect_to_logical_screen(mu_Rect *rect) {
+  int max_x = WIDTH - rect->w;
+  int max_y = HEIGHT - rect->h;
+
+  rect->x = clamp_int(rect->x, 0, max_x);
+  rect->y = clamp_int(rect->y, 0, max_y);
+}
+
 static bool is_inside_drawing_area(int x, int y) {
   return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
 }
@@ -490,11 +514,7 @@ int main() {
       mu_slider(ctx, &g_line_color_b, 0, 255);
 
       mu_layout_row(ctx, 1, wc, 0);
-      colored_label(ctx, "Current line color preview",
-                    mu_color((int)g_line_color_r,
-                             (int)g_line_color_g,
-                             (int)g_line_color_b,
-                             255));
+      colored_label(ctx, "Current line color preview", mu_color((int)g_line_color_r, (int)g_line_color_g, (int)g_line_color_b,255));
 
       mu_layout_row(ctx, 1, wc, 0);
       if (mu_button(ctx, "Clear canvas")) {
@@ -537,6 +557,7 @@ int main() {
     g_canvas_window_open = canvas_state->open;
 
     mu_Container *controls_state = mu_get_container(ctx, "Window Controls");
+    clamp_rect_to_logical_screen(&controls_state->rect);
     g_window_controls_rect = controls_state->rect;
     g_window_controls_open = controls_state->open;
 

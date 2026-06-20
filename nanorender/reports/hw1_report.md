@@ -570,8 +570,22 @@ The following demo shows the clear canvas button removing the saved lines:
 ---
 ---
 
+## Development Notes
 
+During this assignment, the main challenge was understanding how input, UI layout, and rendering work together, not only drawing graphics.
 
+At first, I noticed that the visible UI controls and the clickable areas did not always match perfectly. In Part 4, I tested this using a temporary click marker and renderer visual offsets.
+
+This helped me understand that MicroUI handles layout and input hit-testing, while `UIRenderer` only draws the UI on the framebuffer. Therefore, moving the UI visually in the renderer does not move the logical clickable area.
+
+Later, I found that part of the issue was also related to my testing setup. The application window was too large for my laptop screen, which made the UI feel misaligned during interaction.
+
+After resizing the application window and adjusting the UI layout, the old Y-axis offsets were no longer needed. I set both the UI input offset and the line drawing offset back to `0`, and the mouse position matched the UI controls correctly.
+
+This showed me that input problems can come from several sources, including the renderer, UI logic, input mapping, and even the window size used during testing.
+
+---
+---
 
 ## Additional UI Cleanup and Usability Improvements
 
@@ -598,6 +612,11 @@ In hindsight, it would have been better to make these UI cleanup improvements gr
 - The slider values are not reset when switching between background modes. This keeps the last selected values saved and makes the controls feel more consistent.
 
 - I prevented line drawing from starting when the first mouse press happens on top of a UI window. If the line starts on the background, the user can still drag the line across UI windows normally. This keeps the drawing behavior natural while preventing accidental lines when interacting with the UI.
+
+- I kept the `Window Controls` panel inside the visible logical application area. This makes sure that the always-available control panel remains reachable even after dragging it near the window edges.
+
+- I applied this boundary restriction only to the `Window Controls` panel. The `Widgets` and `Creative Canvas` windows can still be moved freely because they can be restored using the buttons inside `Window Controls`.
+
 
 ### Result
 
@@ -646,51 +665,38 @@ The following demos summarize the final behavior after the improvements.
   </tr>
 </table>
 
-### Current status and next improvements
+<table>
+  <tr>
+    <td align="center"><b>Before Window Controls boundary fix</b></td>
+    <td align="center"><b>After Window Controls boundary fix</b></td>
+  </tr>
+  <tr>
+    <td>
+      Before the fix, the <code>Window Controls</code> panel could be dragged outside the visible application area.
+    </td>
+    <td>
+      After the fix, the panel remains inside the visible logical application area, so it stays reachable.
+    </td>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw1_window_controls_bounds_before.gif" width="350"></td>
+    <td><img src="../assets/hw1_window_controls_bounds_after.gif" width="350"></td>
+  </tr>
+</table>
 
-The cleanup is working well, and the main interaction issues are now improved.
 
-The remaining improvement I still want to continue later is:
 
-- Keep the `Window Controls` panel inside the visible window bounds, so it always remains reachable after dragging.
+
+## Final note and future direction
+
+These cleanup changes made the Assignment 1 interface more usable and gave me a clearer base before continuing with the next assignment.
+
+This final cleanup also helped me understand that usability issues are part of graphics programming, not only visual output. I learned that small interaction details, such as window placement, input boundaries, and accidental clicks, can strongly affect how comfortable the application feels to use.
+
+For this cleanup, I kept the `Window Controls` boundary check based on the fixed logical application size, which is `1600 × 900`.
+
+I did not implement full dynamic window resizing because the framebuffer, renderer, drawing bounds, and display update call are all currently based on the fixed `WIDTH` and `HEIGHT` values.
+
+Supporting true dynamic resizing would require a larger refactor, such as using a dynamic framebuffer, updating the renderer dimensions, changing drawing bounds, and checking input-coordinate mapping after resizing.
 
 I also noticed that if future assignments add more UI windows, screen space may become harder to manage. For the current version, I kept the windows open by default because this is simpler and more useful while the number of windows is still small. If later assignments require more windows or more groups of controls, I can organize them into separate panels and use the `Window Controls` panel to show or reset only the needed group.
-
-Overall, this cleanup made the existing Assignment 1 interface more usable and gave me a clearer base before continuing with the next assignment.
-
-
----
----
-
-## Development Notes
-
-During this assignment, the main challenge was understanding how input, UI layout, and rendering work together, not only drawing graphics.
-
-At first, I noticed that the visible UI controls and the clickable areas did not always match perfectly. In Part 4, I tested this using a temporary click marker and renderer visual offsets.
-
-This helped me understand that MicroUI handles layout and input hit-testing, while `UIRenderer` only draws the UI on the framebuffer. Therefore, moving the UI visually in the renderer does not move the logical clickable area.
-
-Later, I found that part of the issue was also related to my testing setup. The application window was too large for my laptop screen, which made the UI feel misaligned during interaction.
-
-After resizing the application window and adjusting the UI layout, the old Y-axis offsets were no longer needed. I set both the UI input offset and the line drawing offset back to `0`, and the mouse position matched the UI controls correctly.
-
-This showed me that input problems can come from several sources, including the renderer, UI logic, input mapping, and even the window size used during testing.
-
----
----
-
-## Current Assignment Conclusion
-
-This assignment helped me understand the connection between framebuffer rendering, UI logic, input handling, and application state.
-
-I started with simple pixel manipulation and gradually added interaction, keyboard input, UI-controlled state, line drawing, color controls, and a small creative canvas.
-
-The most important lesson was that the visual result and the logical interaction are not always the same thing.  
-A UI element can appear in one place, while its clickable area may be calculated somewhere else if the coordinate handling is not consistent.
-
-I also learned that real-time graphics applications need persistent state.  
-Because the framebuffer is redrawn every frame, anything that should remain visible, such as saved lines, must be stored and drawn again each frame.
-
-The current version of the project works as an interactive drawing canvas with background controls, line color controls, saved lines, preview drawing, and window management controls.
-
-I still plan to continue improving the UI behavior, especially keeping the always-available control panel inside the visible window bounds and organizing the project assets more clearly.
