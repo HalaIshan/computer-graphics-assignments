@@ -5,6 +5,8 @@
 #include <string.h>
 #include <algorithm>
 #include <vector>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 extern "C" {
 #include "microui.h"
@@ -13,7 +15,7 @@ extern "C" {
 #include "ui_renderer.h"
 
 #define WIDTH 1600
-#define HEIGHT 1200
+#define HEIGHT 900
 
 static uint32_t g_buffer[WIDTH * HEIGHT];
 static bool g_checkerboard_mode = false;
@@ -65,7 +67,7 @@ static bool is_inside_drawing_area(int x, int y) {
 static void update_line_drawing(mu_Context *ctx) {
   bool left_down = (ctx->mouse_down & MU_MOUSE_LEFT) != 0;
 
-  static const int LINE_DRAWING_OFFSET_Y = 60;
+  static const int LINE_DRAWING_OFFSET_Y = 0;
 
   int mouse_x = ctx->mouse_pos.x;
   int mouse_y = ctx->mouse_pos.y + LINE_DRAWING_OFFSET_Y; // Adjust for UI input offset
@@ -181,6 +183,11 @@ int main() {
   mu_Context *ctx = (mu_Context *)malloc(sizeof(mu_Context));
   mu_init(ctx);
 
+  // Make UI rows taller so text is not clipped
+  ctx->style->size.y = 22;
+  ctx->style->padding = 4;
+  ctx->style->spacing = 4;
+
   // Set font callbacks for microui
   ctx->text_width = [](mu_Font font, const char *str, int len) {
     return (len < 0 ? (int)strlen(str) : len) * 8;
@@ -188,6 +195,15 @@ int main() {
   ctx->text_height = [](mu_Font font) { return 8; };
 
   UIRenderer renderer(WIDTH, HEIGHT);
+
+  // Part 0: small GLM test
+  glm::vec3 glm_test_point(1.0f, 2.0f, 3.0f);
+  glm::mat4 glm_test_matrix(1.0f);
+
+  glm_test_matrix = glm::translate(glm_test_matrix, glm::vec3(10.0f, 0.0f, 0.0f));
+
+  glm::vec4 glm_test_result =
+      glm_test_matrix * glm::vec4(glm_test_point, 1.0f);
 
   // Set up char input callback for textbox input
   mfb_set_char_input_callback(
@@ -219,7 +235,7 @@ int main() {
     // so we shift the mouse position down before MicroUI uses it.
     int raw_mouse_y = ctx->mouse_pos.y;
 
-    static const int UI_INPUT_OFFSET_Y = 35;
+    static const int UI_INPUT_OFFSET_Y = 0;
     ctx->mouse_pos.y = raw_mouse_y + UI_INPUT_OFFSET_Y;
 
     update_line_drawing(ctx);
@@ -278,18 +294,13 @@ int main() {
     }
 
     // 3. UI Logic
-    // static float slider_val = 50.0f;
-    // static float number_val = 3.14f;
-    // static int checkbox_a = 0;
-    // static int checkbox_b = 1;
-    // static char textbox_buf[128] = "edit me";
     static bool quit_requested = false;
     static int show_part2_label = 0;
 
     mu_begin(ctx);
 
     // --- Widgets window ---
-    if (mu_begin_window(ctx, "Widgets", mu_rect(20, 20, 360, 400))){
+    if (mu_begin_window(ctx, "Widgets", mu_rect(20, 20, 360, 800))){
       int w1[] = {-1};
 
       // Part 3: keyboard controls explanation
@@ -323,24 +334,7 @@ int main() {
       mu_layout_row(ctx, 1, w1, 8);
       mu_label(ctx, "");
 
-      // label / text
-      // mu_layout_row(ctx, 1, w1, 0);
-      // mu_label(ctx, "mu_label: plain static text");
-      // mu_text(ctx, "mu_text: word-wrapped longer text that will reflow inside "
-      //              "the window width automatically.");
-
-      // button
-      // mu_layout_row(ctx, 1, w1, 0);
-      // if (mu_button(ctx, "mu_button: click me")) {
-      //   quit_requested = false; // just a reaction
-      // }
-
-      // checkbox
-      // mu_layout_row(ctx, 1, w1, 0);
-      // mu_checkbox(ctx, "mu_checkbox A (off)", &checkbox_a);
-      // mu_checkbox(ctx, "mu_checkbox B (on)", &checkbox_b);
-
-            // Part 2: custom interactive widget
+      // Part 2: custom interactive widget
       mu_layout_row(ctx, 1, w1, 8);
       mu_label(ctx, "");
 
@@ -358,38 +352,37 @@ int main() {
         colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));
       }
 
-      // textbox
-      // mu_layout_row(ctx, 1, w1, 0);
-      // mu_label(ctx, "mu_textbox:");
-      // mu_textbox(ctx, textbox_buf, sizeof(textbox_buf));
+      // Assignment 2 - Part 0: GLM test display
+      mu_layout_row(ctx, 1, w1, 18);
+      mu_label(ctx, "");
 
-      // slider
-      // mu_layout_row(ctx, 1, w1, 0);
-      // mu_label(ctx, "mu_slider (0-100):");
-      // mu_slider(ctx, &slider_val, 0, 100);
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Assignment 2 - Part 0:", mu_color(200, 180, 255, 255));
 
-      // number
-      // mu_layout_row(ctx, 1, w1, 0);
-      // mu_label(ctx, "mu_number (step 0.1):");
-      // mu_number(ctx, &number_val, 0.1f);
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "GLM transformation test", mu_color(200, 180, 255, 255));
 
-      // header (collapsible section)
-      // if (mu_header(ctx, "mu_header: collapsible section")) {
-      //   mu_layout_row(ctx, 1, w1, 0);
-      //   mu_label(ctx, "Content inside the header.");
-      // }
+      mu_layout_row(ctx, 1, w1, 8);
+      mu_label(ctx, "");
 
-      // treenode
-      // if (mu_begin_treenode(ctx, "mu_treenode: root")) {
-      //   mu_layout_row(ctx, 1, w1, 0);
-      //   mu_label(ctx, "child item A");
-      //   if (mu_begin_treenode(ctx, "nested node")) {
-      //     mu_layout_row(ctx, 1, w1, 0);
-      //     mu_label(ctx, "deeply nested item");
-      //     mu_end_treenode(ctx);
-      //   }
-      //   mu_end_treenode(ctx);
-      // }
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, "Original point: 1.0, 2.0, 3.0");
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, "Translation: +10.0 on X axis");
+
+      char glm_result_text[128];
+      snprintf(glm_result_text, sizeof(glm_result_text),
+               "Result point: %.1f, %.1f, %.1f",
+               glm_test_result.x,
+               glm_test_result.y,
+               glm_test_result.z);
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, glm_result_text, mu_color(180, 255, 180, 255));
+
+      mu_layout_row(ctx, 1, w1, 12);
+      mu_label(ctx, "");
 
       // quit button
       mu_layout_row(ctx, 1, w1, 0);
@@ -400,24 +393,8 @@ int main() {
       mu_end_window(ctx);
     }
 
-    // --- Panel window ---
-    // if (mu_begin_window(ctx, "Panel Demo", mu_rect(395, 20, 380, 200))) {
-    //   int w2[] = {-1};
-    //   mu_layout_row(ctx, 1, w2, 120);
-    //   mu_begin_panel(ctx, "scrollable panel");
-    //   int wp[] = {-1};
-    //   for (int i = 1; i <= 12; i++) {
-    //     mu_layout_row(ctx, 1, wp, 0);
-    //     char line[32];
-    //     snprintf(line, sizeof(line), "Panel row %d", i);
-    //     mu_label(ctx, line);
-    //   }
-    //   mu_end_panel(ctx);
-    //   mu_end_window(ctx);
-    // }
-
     // --- Creative Canvas window ---
-    if (mu_begin_window(ctx, "Creative Canvas", mu_rect(390, 20, 360, 350))) {
+    if (mu_begin_window(ctx, "Creative Canvas", mu_rect(390, 20, 360, 450))) {
       int wc[] = {-1};
 
       mu_layout_row(ctx, 1, wc, 0);
@@ -462,7 +439,7 @@ int main() {
     }
 
     // --- Popup demo window ---
-    if (mu_begin_window(ctx, "Popup Demo", mu_rect(760, 70, 380, 80))) {
+    if (mu_begin_window(ctx, "Popup Demo", mu_rect(760, 70, 380, 120))) {
       int w3[] = {-1};
       mu_layout_row(ctx, 1, w3, 0);
       if (mu_button(ctx, "Open popup")) {
@@ -494,16 +471,6 @@ int main() {
       break;
     }
 
-    // Part 6: hardcoded test lines for Bresenham's line algorithm
-    // draw_line(520, 420, 1120, 420, MFB_RGB(255, 255, 255)); // horizontal line
-    // draw_line(520, 450, 520, 950, MFB_RGB(255, 0, 0));      // vertical line
-
-    // draw_line(560, 500, 1150, 700, MFB_RGB(0, 255, 0));     // shallow slope line
-    // draw_line(600, 1000, 850, 480, MFB_RGB(255, 255, 0));   // steep slope line
-
-    // draw_line(1180, 800, 650, 550, MFB_RGB(0, 180, 255));   // reverse direction line
-    // draw_line(1180, 1000, 700, 620, MFB_RGB(255, 0, 255));  // reverse diagonal line
-
     // Part 6: draw saved lines
     for (const DrawnLine &line : g_drawn_lines) {
       draw_line(line.x0, line.y0, line.x1, line.y1, line.color);
@@ -518,10 +485,6 @@ int main() {
 
     // 4. UI Rendering
     renderer.render(ctx, g_buffer);
-
-    // Part 4 temporary debug marker.
-    // Drawn after UI rendering so it appears on top of the UI.
-    // draw_click_marker();
 
     // 5. Display
     mfb_update_state state = mfb_update_ex(window, g_buffer, WIDTH, HEIGHT);
