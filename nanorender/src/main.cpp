@@ -61,7 +61,7 @@ static uint32_t get_current_line_color() {
 }
 
 static bool is_inside_drawing_area(int x, int y) {
-  return x > 420 && x < WIDTH && y > 0 && y < HEIGHT;
+  return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
 }
 
 static void update_line_drawing(mu_Context *ctx) {
@@ -297,8 +297,27 @@ int main() {
     static bool quit_requested = false;
     static int show_part2_label = 0;
 
-    mu_begin(ctx);
+    static bool reset_widgets_requested = false;
+    static bool reset_canvas_requested = false;
 
+    mu_begin(ctx);
+    
+    if (reset_widgets_requested) {
+      mu_Container *widgets = mu_get_container(ctx, "Widgets");
+      widgets->rect = mu_rect(20, 20, 360, 800);
+      widgets->open = 1;
+      mu_bring_to_front(ctx, widgets);
+      reset_widgets_requested = false;
+    }
+
+    if (reset_canvas_requested) {
+      mu_Container *canvas = mu_get_container(ctx, "Creative Canvas");
+      canvas->rect = mu_rect(390, 20, 360, 450);
+      canvas->open = 1;
+      mu_bring_to_front(ctx, canvas);
+      reset_canvas_requested = false;
+    }
+    
     // --- Widgets window ---
     if (mu_begin_window(ctx, "Widgets", mu_rect(20, 20, 360, 800))){
       int w1[] = {-1};
@@ -353,36 +372,36 @@ int main() {
       }
 
       // Assignment 2 - Part 0: GLM test display
-      mu_layout_row(ctx, 1, w1, 18);
-      mu_label(ctx, "");
+      // mu_layout_row(ctx, 1, w1, 18);
+      // mu_label(ctx, "");
 
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Assignment 2 - Part 0:", mu_color(200, 180, 255, 255));
+      // mu_layout_row(ctx, 1, w1, 0);
+      // colored_label(ctx, "Assignment 2 - Part 0:", mu_color(200, 180, 255, 255));
 
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "GLM transformation test", mu_color(200, 180, 255, 255));
+      // mu_layout_row(ctx, 1, w1, 0);
+      // colored_label(ctx, "GLM transformation test", mu_color(200, 180, 255, 255));
 
-      mu_layout_row(ctx, 1, w1, 8);
-      mu_label(ctx, "");
+      // mu_layout_row(ctx, 1, w1, 8);
+      // mu_label(ctx, "");
 
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "Original point: 1.0, 2.0, 3.0");
+      // mu_layout_row(ctx, 1, w1, 0);
+      // mu_label(ctx, "Original point: 1.0, 2.0, 3.0");
 
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "Translation: +10.0 on X axis");
+      // mu_layout_row(ctx, 1, w1, 0);
+      // colored_label(ctx, "Translation: +10.0 on X axis", mu_color(200, 180, 255, 255));
 
-      char glm_result_text[128];
-      snprintf(glm_result_text, sizeof(glm_result_text),
-               "Result point: %.1f, %.1f, %.1f",
-               glm_test_result.x,
-               glm_test_result.y,
-               glm_test_result.z);
+      // char glm_result_text[128];
+      // snprintf(glm_result_text, sizeof(glm_result_text),
+      //          "Result point: %.1f, %.1f, %.1f",
+      //          glm_test_result.x,
+      //          glm_test_result.y,
+      //          glm_test_result.z);
 
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, glm_result_text, mu_color(180, 255, 180, 255));
+      // mu_layout_row(ctx, 1, w1, 0);
+      // colored_label(ctx, glm_result_text, mu_color(180, 255, 180, 255));
 
-      mu_layout_row(ctx, 1, w1, 12);
-      mu_label(ctx, "");
+      // mu_layout_row(ctx, 1, w1, 12);
+      // mu_label(ctx, "");
 
       // quit button
       mu_layout_row(ctx, 1, w1, 0);
@@ -438,29 +457,25 @@ int main() {
       mu_end_window(ctx);
     }
 
-    // --- Popup demo window ---
-    if (mu_begin_window(ctx, "Popup Demo", mu_rect(760, 70, 380, 120))) {
-      int w3[] = {-1};
-      mu_layout_row(ctx, 1, w3, 0);
-      if (mu_button(ctx, "Open popup")) {
-        mu_Container *popup = mu_get_container(ctx, "my popup");
-        popup->rect = mu_rect(ctx->mouse_pos.x, ctx->mouse_pos.y, 260, 84);
-        popup->open = 1;
-        ctx->hover_root = ctx->next_hover_root = popup;
-        mu_bring_to_front(ctx, popup);
+    // --- Window Controls ---
+    int window_controls_options = MU_OPT_NOCLOSE | MU_OPT_NORESIZE;
+
+    if (mu_begin_window_ex(ctx, "Window Controls", mu_rect(860, 20, 260, 150), window_controls_options)) {
+      int ww[] = {-1};
+
+      mu_layout_row(ctx, 1, ww, 0);
+      colored_label(ctx, "Window controls:", mu_color(220, 220, 255, 255));
+
+      mu_layout_row(ctx, 1, ww, 0);
+      if (mu_button(ctx, "Show / Reset Widgets")) {
+        reset_widgets_requested = true;
       }
-      int popup_opt = MU_OPT_POPUP | MU_OPT_NORESIZE | MU_OPT_NOSCROLL |
-                      MU_OPT_NOTITLE | MU_OPT_CLOSED;
-      if (mu_begin_window_ex(ctx, "my popup", mu_rect(0, 0, 260, 84),
-                             popup_opt)) {
-        int wp[] = {-1};
-        mu_layout_row(ctx, 1, wp, 0);
-        mu_label(ctx, "mu_popup: click outside to close");
-        if (mu_button(ctx, "Close")) {
-          mu_get_current_container(ctx)->open = 0;
-        }
-        mu_end_window(ctx);
+
+      mu_layout_row(ctx, 1, ww, 0);
+      if (mu_button(ctx, "Show / Reset Canvas")) {
+        reset_canvas_requested = true;
       }
+
       mu_end_window(ctx);
     }
 

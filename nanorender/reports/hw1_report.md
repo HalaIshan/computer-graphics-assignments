@@ -286,6 +286,17 @@ The following demo shows the corrected behavior without the red debug marker:
 This final test shows that the UI is visually back in its normal position, and the clickable area is now better aligned with the visible button.
 
 
+### Final Input Alignment Update
+
+After more testing, I discovered that the remaining input alignment problem was related to the application window size.
+
+The window was larger than my laptop screen, so part of it was not comfortably visible during testing. This made the visible UI position and the mouse interaction feel misaligned.
+
+After resizing the application window and adjusting the UI layout, the old Y-axis offsets were no longer needed.
+
+I set both the UI input offset and the line drawing offset back to `0`. After this change, the mouse position matched the visible UI controls correctly.
+
+This showed me that input issues can sometimes come from the testing environment and window size, not only from the renderer or the UI logic.
 
 
 ---
@@ -557,40 +568,86 @@ The following demo shows the clear canvas button removing the saved lines:
 <img src="../assets/part6_3_clear_canvas.gif" width="600">
 
 ---
+---
+
+
+
+
+## Additional UI Cleanup and Usability Improvements
+
+After finishing the main Assignment 1 features, I returned to the interface and made several cleanup improvements.
+
+These changes are not a new drawing algorithm, but they make the creative canvas easier to use and prepare the interface for continued work.
+
+In hindsight, it would have been better to make these UI cleanup improvements gradually during each part of the assignment. However, while working under time pressure and focusing on completing the required features first, I left some usability issues to fix later. Returning to them at the end helped me make the final interface cleaner and easier to continue working with.
+
+### What I improved
+
+I first adjusted the application window size so it opens in a more comfortable size on my screen.
+
+I also adjusted the UI row height, padding, and spacing so the text appears clearly and is not clipped.
+
+After fixing the window size and layout, I rechecked the mouse alignment and removed the old Y-axis offsets. Both the UI input offset and the line drawing offset are now set to `0`.
+
+I also allowed line drawing across the full background instead of limiting it to only one fixed drawing area.
+
+Finally, I replaced the old unused Popup Demo with a useful `Window Controls` panel. Because the main UI windows can take space from the drawing area, I wanted to be able to close them when they are not needed and restore them later. The `Window Controls` panel stays available, cannot be accidentally closed, remains movable, and provides buttons for showing and resetting the `Widgets` window and the `Creative Canvas` window to their original positions.
+
+### Result
+
+The interface is now easier to manage.
+
+The main control windows can be closed or moved, and I can bring them back using the `Window Controls` panel. This gives more free space for drawing while still keeping the controls accessible.
+
+<img src="../assets/hw1_ui_cleanup_window_controls.gif" width="700">
+
+
+### Current status and next improvements
+
+The cleanup is working, but there are still a few improvements I want to continue later:
+
+- Prevent line drawing from starting when clicking or dragging on top of UI windows.
+- Make the background controls more context-aware.
+- Show or enable `Checker tile size` only when checkerboard mode is active.
+- Show or enable `Circle color intensity` only when the circle background mode is active.
+- Keep the last slider values when switching between background modes instead of resetting them.
+- Keep the `Window Controls` panel inside the visible window bounds, so it always remains reachable after dragging.
+
+I also noticed that if future assignments add more UI windows, screen space may become harder to manage. For the current version, I kept the windows open by default because this is simpler and more useful while the number of windows is still small. If later assignments require more windows or more groups of controls, I can organize them into separate panels and use the `Window Controls` panel to show or reset only the needed group.
+
+Overall, this cleanup made the existing Assignment 1 interface more usable and gave me a clearer base before continuing with the next assignment.
+---
+---
 
 ## Development Notes
 
-During the assignment, most parts worked after testing and small adjustments.  
-The main difficulty I faced was the input alignment between the visible UI controls and the actual mouse click position.
+During this assignment, the main challenge was understanding how input, UI layout, and rendering work together, not only drawing graphics.
 
-This issue first appeared as a small observation in Part 2, when the checkbox click area did not perfectly match the visible widget position.  
-Later, in Part 4, I investigated the problem more directly by adding a temporary click marker and testing visual renderer offsets.
+At first, I noticed that the visible UI controls and the clickable areas did not always match perfectly. In Part 4, I tested this using a temporary click marker and renderer visual offsets.
 
-This helped me understand that MicroUI handles the input logic and widget hit-testing, while the renderer only draws the UI on the framebuffer.  
-Because of that, moving the visual UI in the renderer did not automatically move the clickable area.
+This helped me understand that MicroUI handles layout and input hit-testing, while `UIRenderer` only draws the UI on the framebuffer. Therefore, moving the UI visually in the renderer does not move the logical clickable area.
 
-A similar issue appeared again in Part 6 when I added more controls for the Creative Canvas.  
-Some controls worked correctly, but when I placed too many controls lower in the same window, the click position became less accurate.
+Later, I found that part of the issue was also related to my testing setup. The application window was too large for my laptop screen, which made the UI feel misaligned during interaction.
 
-I tried a few layouts before choosing the final arrangement.  
-At first, I placed the Creative Canvas controls inside the same long window. Then I tested moving them into their own separate window and adjusted the drawing area so clicking on UI controls would not start drawing lines.
+After resizing the application window and adjusting the UI layout, the old Y-axis offsets were no longer needed. I set both the UI input offset and the line drawing offset back to `0`, and the mouse position matched the UI controls correctly.
 
-The final solution was to keep the Creative Canvas controls in a separate UI window near the main controls, and to keep the drawing area separate from the UI area.  
-This made the interface cleaner and made the drawing tool easier to use.
+This showed me that input problems can come from several sources, including the renderer, UI logic, input mapping, and even the window size used during testing.
 
 ---
+---
 
-## Final Assignment Conclusion
+## Current Assignment Conclusion
 
-This assignment showed me that interactive graphics programming is not only about drawing pixels, but also about managing the connection between input, state, and visual output.
+This assignment helped me understand the connection between framebuffer rendering, UI logic, input handling, and application state.
+
+I started with simple pixel manipulation and gradually added interaction, keyboard input, UI-controlled state, line drawing, color controls, and a small creative canvas.
 
 The most important lesson was that the visual result and the logical interaction are not always the same thing.  
-A UI element can appear in one place, while its clickable area is calculated somewhere else if the coordinate handling is not consistent. This became clear during the input alignment work.
+A UI element can appear in one place, while its clickable area may be calculated somewhere else if the coordinate handling is not consistent.
 
-I also learned that building a real-time tool requires testing small changes continuously.  
-Each frame redraws the screen, so any permanent result must be stored in application state and drawn again every frame.
+I also learned that real-time graphics applications need persistent state.  
+Because the framebuffer is redrawn every frame, anything that should remain visible, such as saved lines, must be stored and drawn again each frame.
 
-By the end of the assignment, the project became more than a static graphics demo.  
-It became an interactive canvas where the user can control the background, choose line colors, draw permanent lines, preview changes while interacting, and clear the result.
+The current version of the project works as an interactive drawing canvas with background controls, line color controls, saved lines, preview drawing, and window management controls.
 
-Overall, this assignment helped me better understand how framebuffer rendering, UI logic, input handling, and application state work together in one real-time graphics application.
+I still plan to continue improving the UI behavior, especially preventing line drawing while interacting with UI windows and making some background controls more context-aware.
