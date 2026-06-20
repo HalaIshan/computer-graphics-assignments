@@ -340,12 +340,21 @@ int main() {
       colored_label(ctx, "Part 5 background controls:", mu_color(180, 255, 180, 255));
 
       mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "Checker tile size:");
-      mu_slider(ctx, &part5_tile_size, 20, 160);
+      if (g_checkerboard_mode) {
+        colored_label(ctx, "Current background: Checkerboard",
+                      mu_color(180, 255, 180, 255));
 
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_label(ctx, "Circle color intensity:");
-      mu_slider(ctx, &part5_color_intensity, 0.2f, 2.0f);
+        mu_layout_row(ctx, 1, w1, 0);
+        mu_label(ctx, "Checker tile size:");
+        mu_slider(ctx, &part5_tile_size, 20, 160);
+      } else {
+        colored_label(ctx, "Current background: Circles",
+                      mu_color(180, 255, 180, 255));
+
+        mu_layout_row(ctx, 1, w1, 0);
+        mu_label(ctx, "Circle color intensity:");
+        mu_slider(ctx, &part5_color_intensity, 0.2f, 2.0f);
+      }
 
       mu_layout_row(ctx, 1, w1, 0);
       mu_checkbox(ctx, "Animate background", &part5_animate_background);

@@ -583,15 +583,21 @@ In hindsight, it would have been better to make these UI cleanup improvements gr
 
 ### What I improved
 
-I first adjusted the application window size so it opens in a more comfortable size on my screen.
+- I adjusted the application window size so it opens in a more comfortable size on my screen.
 
-I also adjusted the UI row height, padding, and spacing so the text appears clearly and is not clipped.
+- I adjusted the UI row height, padding, and spacing so the text appears clearly and is not clipped.
 
-After fixing the window size and layout, I rechecked the mouse alignment and removed the old Y-axis offsets. Both the UI input offset and the line drawing offset are now set to `0`.
+- After fixing the window size and layout, I rechecked the mouse alignment and removed the old Y-axis offsets. Both the UI input offset and the line drawing offset are now set to `0`.
 
-I also allowed line drawing across the full background instead of limiting it to only one fixed drawing area.
+- I allowed line drawing across the full background instead of limiting it to only one fixed drawing area.
 
-Finally, I replaced the old unused Popup Demo with a useful `Window Controls` panel. Because the main UI windows can take space from the drawing area, I wanted to be able to close them when they are not needed and restore them later. The `Window Controls` panel stays available, cannot be accidentally closed, remains movable, and provides buttons for showing and resetting the `Widgets` window and the `Creative Canvas` window to their original positions.
+- I replaced the old unused Popup Demo with a useful `Window Controls` panel. Because the main UI windows can take space from the drawing area, I wanted to be able to close them when they are not needed and restore them later. The `Window Controls` panel stays available, cannot be accidentally closed, remains movable, and provides buttons for showing and resetting the `Widgets` window and the `Creative Canvas` window to their original positions.
+
+- I made the background controls more context-aware. When the current background is the circles pattern, the UI shows the `Circle color intensity` slider. When the current background is the checkerboard pattern, the UI shows the `Checker tile size` slider. The animation checkbox remains available because it affects both background modes.
+
+- The slider values are not reset when switching between background modes. This keeps the last selected values saved and makes the controls feel more consistent.
+
+
 
 ### Result
 
@@ -601,21 +607,23 @@ The main control windows can be closed or moved, and I can bring them back using
 
 <img src="../assets/hw1_ui_cleanup_window_controls.gif" width="700">
 
+The following demo shows the context-aware background controls:
+
+<img src="../assets/hw1_context_aware_background_controls.gif" width="700">
+
 
 ### Current status and next improvements
 
-The cleanup is working, but there are still a few improvements I want to continue later:
+The cleanup is working, but there are still a few smaller interaction improvements I want to continue later:
 
 - Prevent line drawing from starting when clicking or dragging on top of UI windows.
-- Make the background controls more context-aware.
-- Show or enable `Checker tile size` only when checkerboard mode is active.
-- Show or enable `Circle color intensity` only when the circle background mode is active.
-- Keep the last slider values when switching between background modes instead of resetting them.
 - Keep the `Window Controls` panel inside the visible window bounds, so it always remains reachable after dragging.
 
 I also noticed that if future assignments add more UI windows, screen space may become harder to manage. For the current version, I kept the windows open by default because this is simpler and more useful while the number of windows is still small. If later assignments require more windows or more groups of controls, I can organize them into separate panels and use the `Window Controls` panel to show or reset only the needed group.
 
 Overall, this cleanup made the existing Assignment 1 interface more usable and gave me a clearer base before continuing with the next assignment.
+
+
 ---
 ---
 
