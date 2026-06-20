@@ -49,8 +49,8 @@ Because `distance_squared` depends on both `x` and `y`, the result is a 2D circu
     <td align="center"><b>After</b></td>
   </tr>
   <tr>
-    <td><img src="../assets/original_image.png" width="420"></td>
-    <td><img src="../assets/concentric_circles_pattern_img.png" width="420"></td>
+    <td><img src="../assets/hw1/images/original_image.png" width="420"></td>
+    <td><img src="../assets/hw1/images/concentric_circles_pattern_img.png" width="420"></td>
   </tr>
 </table>
 
@@ -104,8 +104,8 @@ This demonstrates Immediate Mode UI because the widget is declared every frame, 
     <td align="center"><b>Checkbox On</b></td>
   </tr>
   <tr>
-    <td><img src="../assets/part2_img1.png" width="420"></td>
-    <td><img src="../assets/part2_img2.png" width="420"></td>
+    <td><img src="../assets/hw1/images/part2_img1.png" width="420"></td>
+    <td><img src="../assets/hw1/images/part2_img2.png" width="420"></td>
   </tr>
 </table>
 
@@ -156,11 +156,11 @@ The visual change happens immediately because the rendering loop checks these st
 
 ### Demo
 
-![Part 3 demo](../assets/part3_demo.gif)
+![Part 3 demo](../assets/hw1/gifs/part3_demo.gif)
 
 I also added a short instruction label inside the UI window so the user can understand the available keyboard controls directly from the application.
 
-<img src="../assets/part3_label_showing.png" width="300">
+<img src="../assets/hw1/images/part3_label_showing.png" width="300">
 
 
 ---
@@ -183,7 +183,7 @@ This marker was only a debugging and documentation tool. It is not part of Micro
 
 First, I tested the original `ui_renderer.cpp`, without adding any visual offset.
 
-![Original renderer with click marker](../assets/part4_original_renderer_click_marker_existing_mismatch.gif)
+![Original renderer with click marker](../assets/hw1/gifs//part4_original_renderer_click_marker_existing_mismatch.gif)
 
 In this recording, the UI is still drawn in its original position. The red marker helped show the detected click position and made the initial mismatch easier to see.
 
@@ -219,7 +219,7 @@ static const int UI_VISUAL_OFFSET_X = 0;
 static const int UI_VISUAL_OFFSET_Y = 0;
 ```
 
-![Offset 0 click marker existing mismatch](../assets/part4_offset_0_click_marker_existing_mismatch.gif)
+![Offset 0 click marker existing mismatch](../assets/hw1/gifs/part4_offset_0_click_marker_existing_mismatch.gif)
 
 Since the offset is `(0, 0)`, the UI still appears in the same place. This confirmed that adding the offset mechanism alone does not change the rendering unless the offset values are changed.
 
@@ -239,7 +239,7 @@ rect.x += UI_VISUAL_OFFSET_X;
 rect.y += UI_VISUAL_OFFSET_Y;
 ```
 
-![Offset 300 -100 visual mismatch](../assets/part4_offset_300_minus100_visual_mismatch.gif)
+![Offset 300 -100 visual mismatch](../assets/hw1/gifs/part4_offset_300_minus100_visual_mismatch.gif)
 
 Now the UI is drawn in a clearly shifted visual position. However, the clickable area does not move with the drawing.
 
@@ -281,7 +281,7 @@ The temporary red click marker was removed/disabled after this fix, because it w
 
 The following demo shows the corrected behavior without the red debug marker:
 
-![Final corrected alignment](../assets/part4_final_corrected_alignment.gif)
+![Final corrected alignment](../assets/hw1/gifs/part4_final_corrected_alignment.gif)
 
 This final test shows that the UI is visually back in its normal position, and the clickable area is now better aligned with the visible button.
 
@@ -357,10 +357,10 @@ The following table summarizes the new UI controls and how each one affects the 
 
 | UI control | Application state variable | Effect on background | Demo |
 |---|---|---|---|
-| Tile size slider | `part5_tile_size` | Changes the checkerboard square size. | <img src="../assets/part5_checker_tile_size.gif" width="320"> |
-| Color intensity slider | `part5_color_intensity` | Changes the strength of the concentric circle colors. | <img src="../assets/part5_circle_color_intensity.gif" width="320"> |
-| Animate background checkbox | `part5_animate_background` + `frame_counter` | Animates the concentric circle colors over time. | <img src="../assets/part5_animation_background_circle.gif" width="320"> |
-| Animate background checkbox | `part5_animate_background` + `frame_counter` | Moves the checkerboard pattern over time. | <img src="../assets/part5_animation_background_checker.gif" width="320"> |
+| Tile size slider | `part5_tile_size` | Changes the checkerboard square size. | <img src="../assets/hw1/gifs/part5_checker_tile_size.gif" width="320"> |
+| Color intensity slider | `part5_color_intensity` | Changes the strength of the concentric circle colors. | <img src="../assets/hw1/gifs/part5_circle_color_intensity.gif" width="320"> |
+| Animate background checkbox | `part5_animate_background` + `frame_counter` | Animates the concentric circle colors over time. | <img src="../assets/hw1/gifs/part5_animation_background_circle.gif" width="320"> |
+| Animate background checkbox | `part5_animate_background` + `frame_counter` | Moves the checkerboard pattern over time. | <img src="../assets/hw1/gifs/part5_animation_background_checker.gif" width="320"> |
 
 These results show that the new MicroUI widgets directly update application state variables, and the background rendering loop uses the updated values immediately in the next frame.
 
@@ -445,7 +445,7 @@ This shows that the function works for different slopes and directions.
 
 The diagonal lines look slightly stair-stepped because the screen is a discrete pixel grid, which is expected in raster line drawing.
 
-<img src="../assets/part6_bresenham_test_lines.png" width="600">
+<img src="../assets/hw1/images/part6_bresenham_test_lines.png" width="600">
 
 
 ---
@@ -512,7 +512,7 @@ The application now supports interactive line drawing with the mouse.
 While dragging, the application shows a yellow preview line.  
 After releasing the mouse button, the line becomes permanent and is redrawn in white every frame.
 
-<img src="../assets/part6_interactive_line_drawing.gif" width="600">
+<img src="../assets/hw1/gifs/part6_interactive_line_drawing.gif" width="600">
 
 ---
 
@@ -557,15 +557,15 @@ The user can draw multiple permanent lines, choose different colors using the RG
 
 The following image shows lines drawn with different selected colors:
 
-<img src="../assets/part6_3_diffrent_colors_lines.png" width="600">
+<img src="../assets/hw1/images/part6_3_diffrent_colors_lines.png" width="600">
 
 The following demo shows the line color changing using the RGB sliders:
 
-<img src="../assets/part6_3_changing_line_color.gif" width="600">
+<img src="../assets/hw1/gifs/part6_3_changing_line_color.gif" width="600">
 
 The following demo shows the clear canvas button removing the saved lines:
 
-<img src="../assets/part6_3_clear_canvas.gif" width="600">
+<img src="../assets/hw1/gifs/part6_3_clear_canvas.gif" width="600">
 
 ---
 ---
@@ -640,8 +640,8 @@ The following demos summarize the final behavior after the improvements.
     </td>
   </tr>
   <tr>
-    <td><img src="../assets/hw1_ui_cleanup_window_controls.gif" width="350"></td>
-    <td><img src="../assets/hw1_context_aware_background_controls.gif" width="350"></td>
+    <td><img src="../assets/hw1/gifs/hw1_ui_cleanup_window_controls.gif" width="350"></td>
+    <td><img src="../assets/hw1/gifs/hw1_context_aware_background_controls.gif" width="350"></td>
   </tr>
 </table>
 
@@ -660,8 +660,8 @@ The following demos summarize the final behavior after the improvements.
     </td>
   </tr>
   <tr>
-    <td><img src="../assets/hw1_line_start_over_ui_before.gif" width="350"></td>
-    <td><img src="../assets/hw1_line_start_over_ui_after.gif" width="350"></td>
+    <td><img src="../assets/hw1/gifs/hw1_line_start_over_ui_before.gif" width="350"></td>
+    <td><img src="../assets/hw1/gifs/hw1_line_start_over_ui_after.gif" width="350"></td>
   </tr>
 </table>
 
@@ -679,8 +679,8 @@ The following demos summarize the final behavior after the improvements.
     </td>
   </tr>
   <tr>
-    <td><img src="../assets/hw1_window_controls_bounds_before.gif" width="350"></td>
-    <td><img src="../assets/hw1_window_controls_bounds_after.gif" width="350"></td>
+    <td><img src="../assets/hw1/gifs/hw1_window_controls_bounds_before.gif" width="350"></td>
+    <td><img src="../assets/hw1/gifs/hw1_window_controls_bounds_after.gif" width="350"></td>
   </tr>
 </table>
 

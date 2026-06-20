@@ -24,7 +24,7 @@ This is correct because only the X coordinate changed, while the Y and Z coordin
 
 I displayed the result inside the GUI to make the test visible while the program is running.
 
-![Part 0 GLM test](../assets/hw2_part0_glm_test.png)
+![Part 0 GLM test](../assets/hw2/images/hw2_part0_glm_test.png)
 
 After adding GLM, the project compiled and ran successfully, and the correct transformation result appeared in the GUI.
 
