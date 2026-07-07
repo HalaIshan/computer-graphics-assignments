@@ -39,3 +39,47 @@ After this change, the mouse position matched the UI controls correctly.
 During this check, I also noticed a few possible UI improvements from the previous assignment, such as improving window behavior and making some controls more context-aware.
 
 I decided to keep Part 0 focused on the GLM setup and return to these UI improvements later before continuing with the next parts.
+
+## Part 1: Loading and Inspecting 3D Data
+
+In this part, I loaded a simple `.obj` mesh file and stored its data in memory.
+
+I created a small test model called `simple_pyramid.obj` with 5 vertices and 6 triangular faces.
+
+In `main.cpp`, I added a `Mesh` structure to store the list of vertices and faces.
+Each vertex is stored as a `glm::vec3`, and each face stores three vertex indices.
+
+The OBJ loader reads the file line by line.
+Lines that start with `v` are stored as vertices, and lines that start with `f` are stored as faces.
+
+OBJ files use 1-based indices, while C++ vectors use 0-based indices, so I subtract 1 from each face index before storing it.
+
+To check the loader, I displayed the result in the GUI.
+
+![Part 1 OBJ loading test](../assets/hw2/images/part1_obj_loading.png)
+
+The GUI shows that the file was loaded successfully with 5 vertices and 6 faces, which matches the content of the `.obj` file.
+
+The first face appears as `0, 1, 2` because the original OBJ face `1, 2, 3` was converted to C++ vector indexing.
+
+
+----
+-----
+----
+i did some clean up and deleted :
+      // Part 2: custom interactive widget
+      mu_layout_row(ctx, 1, w1, 8);
+      mu_label(ctx, "");
+
+      mu_layout_row(ctx, 1, w1, 0);
+      colored_label(ctx, "Part 2 checkbox demo:", mu_color(255, 220, 80, 255));
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_checkbox(ctx, "Show Part 2 label", &show_part2_label);
+
+      if (show_part2_label) {
+        mu_layout_row(ctx, 1, w1, 0);
+        colored_label(ctx, "Part 2 label is now visible", mu_color(255, 220, 80, 255));
+
+        mu_layout_row(ctx, 1, w1, 0);
+        colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));

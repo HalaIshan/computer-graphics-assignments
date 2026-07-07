@@ -7,6 +7,9 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 extern "C" {
 #include "microui.h"
@@ -39,6 +42,23 @@ struct DrawnLine {
   int y1;
   uint32_t color;
 };
+
+// Assignment 2 - Part 1: simple mesh data structures
+struct Face {
+  int v0;
+  int v1;
+  int v2;
+};
+
+struct Mesh {
+  std::vector<glm::vec3> vertices;
+  std::vector<Face> faces;
+};
+
+static Mesh g_loaded_mesh;
+static bool g_mesh_loaded = false;
+static char g_mesh_status[256] = "Mesh not loaded yet";
+static char g_mesh_path_used[256] = "";
 
 static std::vector<DrawnLine> g_drawn_lines;
 
@@ -237,6 +257,129 @@ static void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
   }
 }
 
+static bool parse_obj_face_index(const std::string &token, int &index) {
+  // OBJ face tokens can look like:
+  // f 1 2 3
+  // or f 1/1/1 2/2/2 3/3/3
+  // For this assignment, we only need the vertex index before the first slash.
+
+  size_t slash_pos = token.find('/');
+  std::string index_text = token;
+
+  if (slash_pos != std::string::npos) {
+    index_text = token.substr(0, slash_pos);
+  }
+
+  if (index_text.empty()) {
+    return false;
+  }
+
+  int obj_index = std::stoi(index_text);
+
+  // OBJ indices start from 1, but C++ vector indices start from 0.
+  if (obj_index <= 0) {
+    return false;
+  }
+
+  index = obj_index - 1;
+  return true;
+}
+
+static bool load_obj_file(const char *filename, Mesh &mesh, char *status, int status_size) {
+  mesh.vertices.clear();
+  mesh.faces.clear();
+
+  std::ifstream file(filename);
+
+  if (!file.is_open()) {
+    snprintf(status, status_size, "Could not open OBJ file: %s", filename);
+    return false;
+  }
+
+  std::string line;
+
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#') {
+      continue;
+    }
+
+    std::istringstream iss(line);
+    std::string prefix;
+    iss >> prefix;
+
+    if (prefix == "v") {
+      float x;
+      float y;
+      float z;
+
+      if (iss >> x >> y >> z) {
+        mesh.vertices.push_back(glm::vec3(x, y, z));
+      }
+    } else if (prefix == "f") {
+      std::string a;
+      std::string b;
+      std::string c;
+
+      if (iss >> a >> b >> c) {
+        Face face;
+
+        try {
+          if (parse_obj_face_index(a, face.v0) &&
+              parse_obj_face_index(b, face.v1) &&
+              parse_obj_face_index(c, face.v2)) {
+            mesh.faces.push_back(face);
+          }
+        } catch (...) {
+          snprintf(status, status_size, "Invalid face format in OBJ file");
+          mesh.vertices.clear();
+          mesh.faces.clear();
+          return false;
+        }
+      }
+    }
+  }
+
+  for (const Face &face : mesh.faces) {
+    if (face.v0 < 0 || face.v0 >= (int)mesh.vertices.size() ||
+        face.v1 < 0 || face.v1 >= (int)mesh.vertices.size() ||
+        face.v2 < 0 || face.v2 >= (int)mesh.vertices.size()) {
+      snprintf(status, status_size, "OBJ file contains a face with an invalid vertex index");
+      mesh.vertices.clear();
+      mesh.faces.clear();
+      return false;
+    }
+  }
+
+  if (mesh.vertices.empty() || mesh.faces.empty()) {
+    snprintf(status, status_size, "OBJ file loaded, but it has no vertices or no faces");
+    return false;
+  }
+
+  snprintf(status, status_size,
+           "Loaded OBJ successfully: %zu vertices, %zu faces",
+           mesh.vertices.size(),
+           mesh.faces.size());
+
+  return true;
+}
+
+static bool load_assignment2_part1_mesh() {
+  const char *candidate_paths[] = {
+      "assets/hw2/models/simple_pyramid.obj",
+      "../assets/hw2/models/simple_pyramid.obj",
+      "../../assets/hw2/models/simple_pyramid.obj"};
+
+  for (const char *path : candidate_paths) {
+    if (load_obj_file(path, g_loaded_mesh, g_mesh_status, sizeof(g_mesh_status))) {
+      snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "%s", path);
+      return true;
+    }
+  }
+
+  snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "No valid path found");
+  return false;
+}
+
 int main() {
   struct mfb_window *window =
       mfb_open_ex("MiniGUI Platform", WIDTH, HEIGHT, MFB_WF_RESIZABLE);
@@ -268,6 +411,9 @@ int main() {
   glm::vec4 glm_test_result =
       glm_test_matrix * glm::vec4(glm_test_point, 1.0f);
 
+  // Assignment 2 - Part 1: load a small OBJ mesh once at startup
+  g_mesh_loaded = load_assignment2_part1_mesh();
+  
   // Set up char input callback for textbox input
   mfb_set_char_input_callback(
       [](struct mfb_window *w, unsigned int c) {
@@ -425,22 +571,53 @@ int main() {
       mu_layout_row(ctx, 1, w1, 8);
       mu_label(ctx, "");
 
-      // Part 2: custom interactive widget
+      // Assignment 2 - Part 1: OBJ loading information
       mu_layout_row(ctx, 1, w1, 8);
       mu_label(ctx, "");
 
       mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Part 2 checkbox demo:", mu_color(255, 220, 80, 255));
+      colored_label(ctx, "Assignment 2 - Part 1:", mu_color(200, 180, 255, 255));
 
       mu_layout_row(ctx, 1, w1, 0);
-      mu_checkbox(ctx, "Show Part 2 label", &show_part2_label);
+      colored_label(ctx, "OBJ loading test", mu_color(200, 180, 255, 255));
 
-      if (show_part2_label) {
-        mu_layout_row(ctx, 1, w1, 0);
-        colored_label(ctx, "Part 2 label is now visible", mu_color(255, 220, 80, 255));
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, g_mesh_loaded ? "Mesh loaded: yes" : "Mesh loaded: no");
+
+      char mesh_vertices_text[128];
+      snprintf(mesh_vertices_text, sizeof(mesh_vertices_text),
+               "Vertices: %zu", g_loaded_mesh.vertices.size());
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, mesh_vertices_text);
+
+      char mesh_faces_text[128];
+      snprintf(mesh_faces_text, sizeof(mesh_faces_text),
+               "Faces: %zu", g_loaded_mesh.faces.size());
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, mesh_faces_text);
+
+      mu_layout_row(ctx, 1, w1, 0);
+      mu_label(ctx, g_mesh_status);
+
+      if (g_mesh_loaded && !g_loaded_mesh.vertices.empty() && !g_loaded_mesh.faces.empty()) {
+        const glm::vec3 &v = g_loaded_mesh.vertices[0];
+        const Face &f = g_loaded_mesh.faces[0];
+
+        char first_vertex_text[128];
+        snprintf(first_vertex_text, sizeof(first_vertex_text),
+                 "First vertex: %.1f, %.1f, %.1f", v.x, v.y, v.z);
 
         mu_layout_row(ctx, 1, w1, 0);
-        colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));
+        mu_label(ctx, first_vertex_text);
+
+        char first_face_text[128];
+        snprintf(first_face_text, sizeof(first_face_text),
+                 "First face: %d, %d, %d", f.v0, f.v1, f.v2);
+
+        mu_layout_row(ctx, 1, w1, 0);
+        mu_label(ctx, first_face_text);
       }
 
       // Assignment 2 - Part 0: GLM test display
