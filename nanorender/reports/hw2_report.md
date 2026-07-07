@@ -40,6 +40,8 @@ During this check, I also noticed a few possible UI improvements from the previo
 
 I decided to keep Part 0 focused on the GLM setup and return to these UI improvements later before continuing with the next parts.
 
+---
+
 ## Part 1: Loading and Inspecting 3D Data
 
 In this part, I loaded a simple `.obj` mesh file and stored its data in memory.
@@ -62,24 +64,14 @@ The GUI shows that the file was loaded successfully with 5 vertices and 6 faces,
 
 The first face appears as `0, 1, 2` because the original OBJ face `1, 2, 3` was converted to C++ vector indexing.
 
+---
 
-----
------
-----
-i did some clean up and deleted :
-      // Part 2: custom interactive widget
-      mu_layout_row(ctx, 1, w1, 8);
-      mu_label(ctx, "");
+## Code Organization Note
 
-      mu_layout_row(ctx, 1, w1, 0);
-      colored_label(ctx, "Part 2 checkbox demo:", mu_color(255, 220, 80, 255));
+After finishing Part 1, I went back to review the code based on the code session comments and the teacher’s suggestion to use the DRY principle.
 
-      mu_layout_row(ctx, 1, w1, 0);
-      mu_checkbox(ctx, "Show Part 2 label", &show_part2_label);
+I reorganized the code without changing its behavior. I removed old unused demo/debug code, grouped related variables together, and moved repeated UI code into helper functions.
 
-      if (show_part2_label) {
-        mu_layout_row(ctx, 1, w1, 0);
-        colored_label(ctx, "Part 2 label is now visible", mu_color(255, 220, 80, 255));
+I also made the code easier to continue by keeping repeated values, such as window titles, UI colors, default window positions, and OBJ paths, in one place.
 
-        mu_layout_row(ctx, 1, w1, 0);
-        colored_label(ctx, "Mission accomplished!", mu_color(255, 220, 80, 255));
+After the cleanup, I checked that the project still compiles and that both the GLM test and OBJ loading test still work correctly.
