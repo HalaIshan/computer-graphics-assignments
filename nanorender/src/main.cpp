@@ -40,6 +40,19 @@ struct Mesh {
   std::vector<Face> faces;
 };
 
+struct BoundingBox {
+  glm::vec3 min;
+  glm::vec3 max;
+};
+
+struct ViewportTransform {
+  BoundingBox box;
+  glm::vec3 center;
+  glm::vec3 translation;
+  float scale;
+  bool valid;
+};
+
 static const char *WIDGETS_WINDOW_TITLE = "Widgets";                  // Left UI panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
@@ -49,9 +62,9 @@ static const char *DEFAULT_MESH_PATHS[] = {
     "../assets/hw2/models/simple_pyramid.obj",   // Running from build folder
     "../../assets/hw2/models/simple_pyramid.obj"}; // Running from nested build folder
 
-static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 360, 800};           // x, y, width, height
-static const mu_Rect DEFAULT_CANVAS_RECT = {390, 20, 360, 450};           // x, y, width, height
-static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {860, 20, 260, 150};  // x, y, width, height
+static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};            // x, y, width, height
+static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 20, 360, 450};           // x, y, width, height
+static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {930, 20, 260, 150};   // x, y, width, height
 
 static const mu_Color KEYBOARD_COLOR = {100, 200, 255, 255};         // Light blue
 static const mu_Color BACKGROUND_COLOR = {180, 255, 180, 255};       // Light green
@@ -75,6 +88,7 @@ static Mesh g_loaded_mesh;
 static bool g_mesh_loaded = false;
 static char g_mesh_status[256] = "Mesh not loaded yet"; // Last load result shown in UI
 static char g_mesh_path_used[256] = "";                 // Path that successfully loaded
+static ViewportTransform g_viewport_transform = {};
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -300,28 +314,105 @@ static void draw_background_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Animate background", &g_background_animate);
 }
 
-static void draw_glm_test_info(mu_Context *ctx, int *widths) {
-  glm::vec3 glm_test_point(1.0f, 2.0f, 3.0f);
-  glm::mat4 glm_test_matrix(1.0f);
+static bool calculate_bounding_box(const Mesh &mesh, BoundingBox &box) {
+  if (mesh.vertices.empty()) {
+    return false;
+  }
 
-  glm_test_matrix = glm::translate(glm_test_matrix, glm::vec3(10.0f, 0.0f, 0.0f));
+  box.min = mesh.vertices[0];
+  box.max = mesh.vertices[0];
 
-  glm::vec4 glm_test_result =
-      glm_test_matrix * glm::vec4(glm_test_point, 1.0f);
+  for (const glm::vec3 &vertex : mesh.vertices) {
+    box.min = glm::min(box.min, vertex);
+    box.max = glm::max(box.max, vertex);
+  }
 
-  colored_label_row(ctx, widths, "GLM test:", MESH_COLOR);
-  colored_label_row(ctx, widths, "GLM transformation test", MESH_COLOR);
-  label_row(ctx, widths, "Original point: 1.0, 2.0, 3.0");
-  colored_label_row(ctx, widths, "Translation: +10.0 on X axis", MESH_COLOR);
+  return true;
+}
 
-  char glm_result_text[128];
-  snprintf(glm_result_text, sizeof(glm_result_text),
-           "Result point: %.1f, %.1f, %.1f",
-           glm_test_result.x,
-           glm_test_result.y,
-           glm_test_result.z);
+static ViewportTransform calculate_viewport_transform(const Mesh &mesh) {
+  ViewportTransform transform = {};
+  transform.valid = calculate_bounding_box(mesh, transform.box);
 
-  colored_label_row(ctx, widths, glm_result_text, BACKGROUND_COLOR);
+  if (!transform.valid) {
+    return transform;
+  }
+
+  glm::vec3 mesh_size = transform.box.max - transform.box.min;
+  float max_extent = std::max(mesh_size.x, std::max(mesh_size.y, mesh_size.z));
+
+  if (max_extent <= 0.0f) {
+    transform.valid = false;
+    return transform;
+  }
+
+  float target_size = 600.0f; // Fits comfortably inside the 1600x900 framebuffer
+  transform.center = (transform.box.min + transform.box.max) * 0.5f;
+  transform.scale = target_size / max_extent;
+  transform.translation = glm::vec3(WIDTH / 2.0f, HEIGHT / 2.0f, 0.0f) -
+                          transform.center * transform.scale;
+
+  return transform;
+}
+
+static glm::vec3 apply_viewport_transform(const glm::vec3 &vertex,
+                                          const ViewportTransform &transform) {
+  return vertex * transform.scale + transform.translation;
+}
+
+static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
+  colored_label_row(ctx, widths, "Viewport transform:", MESH_COLOR);
+
+  if (!g_viewport_transform.valid) {
+    label_row(ctx, widths, "Transform: not available");
+    return;
+  }
+
+  const BoundingBox &box = g_viewport_transform.box;
+
+  char min_text[128];
+  snprintf(min_text, sizeof(min_text),
+           "Min: %.1f, %.1f, %.1f", box.min.x, box.min.y, box.min.z);
+  label_row(ctx, widths, min_text);
+
+  char max_text[128];
+  snprintf(max_text, sizeof(max_text),
+           "Max: %.1f, %.1f, %.1f", box.max.x, box.max.y, box.max.z);
+  label_row(ctx, widths, max_text);
+
+  char center_text[128];
+  snprintf(center_text, sizeof(center_text),
+           "Center: %.1f, %.1f, %.1f",
+           g_viewport_transform.center.x,
+           g_viewport_transform.center.y,
+           g_viewport_transform.center.z);
+  label_row(ctx, widths, center_text);
+
+  char scale_text[128];
+  snprintf(scale_text, sizeof(scale_text),
+           "Scale: %.1f", g_viewport_transform.scale);
+  label_row(ctx, widths, scale_text);
+
+  char translation_text[128];
+  snprintf(translation_text, sizeof(translation_text),
+           "Translate: %.1f, %.1f, %.1f",
+           g_viewport_transform.translation.x,
+           g_viewport_transform.translation.y,
+           g_viewport_transform.translation.z);
+  label_row(ctx, widths, translation_text);
+
+  if (!g_loaded_mesh.vertices.empty()) {
+    glm::vec3 transformed_vertex =
+        apply_viewport_transform(g_loaded_mesh.vertices[0], g_viewport_transform);
+
+    char transformed_vertex_text[128];
+    snprintf(transformed_vertex_text, sizeof(transformed_vertex_text),
+             "First mapped: %.1f, %.1f, %.1f",
+             transformed_vertex.x,
+             transformed_vertex.y,
+             transformed_vertex.z);
+    label_row(ctx, widths, transformed_vertex_text);
+  }
 }
 
 static void draw_mesh_loading_info(mu_Context *ctx, int *widths) {
@@ -371,10 +462,10 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
     draw_background_controls(ctx, widths);
 
     spacer_row(ctx, widths, 8);
-    draw_glm_test_info(ctx, widths);
+    draw_mesh_loading_info(ctx, widths);
 
     spacer_row(ctx, widths, 8);
-    draw_mesh_loading_info(ctx, widths);
+    draw_viewport_transform_info(ctx, widths);
 
     if (button_row(ctx, widths, "Quit")) {
       *quit_requested = true;
@@ -673,11 +764,13 @@ static bool load_default_mesh() {
   for (const char *path : DEFAULT_MESH_PATHS) {
     if (load_obj_file(path, g_loaded_mesh, g_mesh_status, sizeof(g_mesh_status))) {
       snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "%s", path);
+      g_viewport_transform = calculate_viewport_transform(g_loaded_mesh);
       return true;
     }
   }
 
   snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "No valid path found");
+  g_viewport_transform = {};
   return false;
 }
 

@@ -22,17 +22,18 @@ The expected result was:
 
 This is correct because only the X coordinate changed, while the Y and Z coordinates stayed the same.
 
-I displayed the result inside the GUI to make the test visible while the program is running.
+At first, I displayed the result inside the GUI to make the test visible while the program was running.
+After continuing to Part 2, I removed the temporary Part 0 GUI display because GLM is now used directly in the mesh normalization code.
 
 ![Part 0 GLM test](../assets/hw2/images/hw2_part0_glm_test.png)
 
-After adding GLM, the project compiled and ran successfully, and the correct transformation result appeared in the GUI.
+After adding GLM, the project compiled and ran successfully, and the correct transformation result appeared in the GUI during the Part 0 check.
 
 ### Development Note
 
 While testing Part 0, I also checked the mouse input alignment after changing the window size and UI layout.
 
-The old Y-axis offsets that were used before were no longer needed, so I set them back to `0`.
+The old Y-axis offsets that were used before were no longer needed, so I removed that calibration code.
 
 After this change, the mouse position matched the UI controls correctly.
 
@@ -46,7 +47,11 @@ I decided to keep Part 0 focused on the GLM setup and return to these UI improve
 
 In this part, I loaded a simple `.obj` mesh file and stored its data in memory.
 
-I created a small test model called `simple_pyramid.obj` with 5 vertices and 6 triangular faces.
+I created a small square pyramid test model called `simple_pyramid.obj` with 5 vertices and 6 triangular faces.
+
+I used a square pyramid model because it is small and easy to verify manually. It has 5 vertices and 6 triangular faces, so it is suitable for checking that the OBJ loader reads the correct number of vertices and faces.
+
+![Part 1 OBJ file](../assets/hw2/images/part1_obj_file.png)
 
 In `main.cpp`, I added a `Mesh` structure to store the list of vertices and faces.
 Each vertex is stored as a `glm::vec3`, and each face stores three vertex indices.
@@ -68,10 +73,61 @@ The first face appears as `0, 1, 2` because the original OBJ face `1, 2, 3` was 
 
 ## Code Organization Note
 
-After finishing Part 1, I went back to review the code based on the code session comments and the teacher’s suggestion to use the DRY principle.
+After finishing Part 1, I went back to review the code based on the code session comments and the teacher's suggestion to use the DRY principle.
 
 I reorganized the code without changing its behavior. I removed old unused demo/debug code, grouped related variables together, and moved repeated UI code into helper functions.
 
 I also made the code easier to continue by keeping repeated values, such as window titles, UI colors, default window positions, and OBJ paths, in one place.
 
-After the cleanup, I checked that the project still compiles and that both the GLM test and OBJ loading test still work correctly.
+After the cleanup, I checked that the project still compiles and that the OBJ loading and viewport transform information still display correctly.
+
+---
+
+## Part 2: Normalization and the Viewport Transform
+
+In this part, I added a temporary viewport transform for the loaded mesh.
+
+The goal is to make the mesh fit nicely inside the framebuffer, even if the original `.obj` coordinates are very small, very large, or not centered.
+
+First, I calculate the bounding box of the mesh by finding the minimum and maximum `x`, `y`, and `z` values of all vertices.
+
+Then I calculate the center of the mesh:
+
+```text
+center = (min + max) / 2
+```
+
+I also calculate the size of the bounding box and choose the largest dimension:
+
+```text
+size = max - min
+max_extent = max(size.x, size.y, size.z)
+```
+
+I use one uniform scale value for all axes so the mesh keeps its original proportions and does not stretch.
+
+```text
+scale = 600 / max_extent
+```
+
+After that, I calculate a translation vector that moves the scaled mesh to the center of the framebuffer:
+
+```text
+translation = framebuffer_center - center * scale
+```
+
+The final mapping is:
+
+```text
+mapped_position = original_position * scale + translation
+```
+
+I displayed the bounding box values, center, scale, translation, and the first mapped vertex in the GUI to check that the calculation works correctly.
+
+This does not draw the mesh yet. It only prepares the normalized screen coordinates that will be used later for the wireframe rendering.
+
+The following screenshot shows the calculated viewport transform values in the GUI:
+
+![Part 2 viewport transform](../assets/hw2/images/part2_viewport_transform.png)
+
+For the square pyramid model, the bounding box is from `-1` to `1` on each axis. This gives a center of `(0, 0, 0)`, a scale of `300`, and a translation of `(800, 450, 0)`, which places the normalized model around the center of the framebuffer.
