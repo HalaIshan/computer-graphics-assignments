@@ -131,3 +131,20 @@ The following screenshot shows the calculated viewport transform values in the G
 ![Part 2 viewport transform](../assets/hw2/images/part2_viewport_transform.png)
 
 For the square pyramid model, the bounding box is from `-1` to `1` on each axis. This gives a center of `(0, 0, 0)`, a scale of `300`, and a translation of `(800, 450, 0)`, which places the normalized model around the center of the framebuffer.
+
+---
+
+## Prework Before Part 3
+
+Before starting the wireframe rendering step, I prepared the display area so the mesh will be easier to see.
+I added a plain gray background as the default mode, because a wireframe will be clearer on a simple background than on the colorful animated pattern.
+The darker inverted shade is enabled by default because it shows both light and dark drawing colors clearly, and pressing `I` toggles back to the lighter gray shade.
+
+The `P` key now cycles between the available background modes in this order:
+
+```text
+Plain -> Circles -> Checkerboard
+```
+
+When the background is plain, the extra background controls are hidden because there is no tile size, color intensity, or animation to adjust.
+When the background is changed to circles or checkerboard, the relevant slider and animation checkbox appear again.

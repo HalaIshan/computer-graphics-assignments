@@ -53,6 +53,12 @@ struct ViewportTransform {
   bool valid;
 };
 
+enum BackgroundMode {
+  BACKGROUND_PLAIN,
+  BACKGROUND_CIRCLES,
+  BACKGROUND_CHECKERBOARD
+};
+
 static const char *WIDGETS_WINDOW_TITLE = "Widgets";                  // Left UI panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
@@ -76,8 +82,8 @@ static const mu_Color WINDOW_CONTROLS_COLOR = {220, 220, 255, 255};  // Pale blu
 static uint32_t g_buffer[WIDTH * HEIGHT];
 
 // Background state controlled by UI widgets
-static bool g_checkerboard_mode = false;
-static bool g_invert_colors = false;
+static BackgroundMode g_background_mode = BACKGROUND_PLAIN;
+static bool g_invert_colors = true;                // Start with darker plain background
 static float g_background_tile_size = 80.0f;        // Checkerboard square size
 static float g_background_color_intensity = 1.0f;   // Circle pattern brightness multiplier
 static int g_background_animate = 0;                // MicroUI checkbox uses int
@@ -148,6 +154,16 @@ static uint8_t apply_color_intensity(uint8_t value, float intensity) {
 
 static uint8_t invert_color_channel(uint8_t value) {
   return 255 - value;
+}
+
+static void cycle_background_mode() {
+  if (g_background_mode == BACKGROUND_PLAIN) {
+    g_background_mode = BACKGROUND_CIRCLES;
+  } else if (g_background_mode == BACKGROUND_CIRCLES) {
+    g_background_mode = BACKGROUND_CHECKERBOARD;
+  } else {
+    g_background_mode = BACKGROUND_PLAIN;
+  }
 }
 
 // Window and input helpers
@@ -295,23 +311,23 @@ static void slider_row(mu_Context *ctx, int *widths, const char *label,
 static void draw_keyboard_controls(mu_Context *ctx, int *widths) {
   mu_Color keyboard_color = KEYBOARD_COLOR;
   colored_label_row(ctx, widths, "Keyboard controls:", keyboard_color);
-  colored_label_row(ctx, widths, "P: switch circles/checkerboard", keyboard_color);
+  colored_label_row(ctx, widths, "P: change background", keyboard_color);
+  colored_label_row(ctx, widths, "Cycle: Plain > Circles > Checker", keyboard_color);
   colored_label_row(ctx, widths, "I: invert background colors", keyboard_color);
 }
 
 static void draw_background_controls(mu_Context *ctx, int *widths) {
   mu_Color background_color = BACKGROUND_COLOR;
-  colored_label_row(ctx, widths, "Background controls:", background_color);
 
-  if (g_checkerboard_mode) {
-    colored_label_row(ctx, widths, "Current background: Checkerboard", background_color);
+  if (g_background_mode == BACKGROUND_CHECKERBOARD) {
+    colored_label_row(ctx, widths, "Background controls:", background_color);
     slider_row(ctx, widths, "Checker tile size:", &g_background_tile_size, 20, 160);
-  } else {
-    colored_label_row(ctx, widths, "Current background: Circles", background_color);
+    checkbox_row(ctx, widths, "Animate background", &g_background_animate);
+  } else if (g_background_mode == BACKGROUND_CIRCLES) {
+    colored_label_row(ctx, widths, "Background controls:", background_color);
     slider_row(ctx, widths, "Circle color intensity:", &g_background_color_intensity, 0.2f, 2.0f);
+    checkbox_row(ctx, widths, "Animate background", &g_background_animate);
   }
-
-  checkbox_row(ctx, widths, "Animate background", &g_background_animate);
 }
 
 static bool calculate_bounding_box(const Mesh &mesh, BoundingBox &box) {
@@ -370,15 +386,12 @@ static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
 
   const BoundingBox &box = g_viewport_transform.box;
 
-  char min_text[128];
-  snprintf(min_text, sizeof(min_text),
-           "Min: %.1f, %.1f, %.1f", box.min.x, box.min.y, box.min.z);
-  label_row(ctx, widths, min_text);
-
-  char max_text[128];
-  snprintf(max_text, sizeof(max_text),
-           "Max: %.1f, %.1f, %.1f", box.max.x, box.max.y, box.max.z);
-  label_row(ctx, widths, max_text);
+  char bounds_text[160];
+  snprintf(bounds_text, sizeof(bounds_text),
+           "Bounds: %.1f %.1f %.1f to %.1f %.1f %.1f",
+           box.min.x, box.min.y, box.min.z,
+           box.max.x, box.max.y, box.max.z);
+  label_row(ctx, widths, bounds_text);
 
   char center_text[128];
   snprintf(center_text, sizeof(center_text),
@@ -418,22 +431,19 @@ static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
 static void draw_mesh_loading_info(mu_Context *ctx, int *widths) {
   mu_Color mesh_color = MESH_COLOR;
   colored_label_row(ctx, widths, "Mesh loading:", mesh_color);
-  colored_label_row(ctx, widths, "OBJ loading test", mesh_color);
 
-  label_row(ctx, widths, g_mesh_loaded ? "Mesh loaded: yes" : "Mesh loaded: no");
+  char mesh_summary_text[128];
+  snprintf(mesh_summary_text, sizeof(mesh_summary_text),
+           "Loaded: %s | V: %zu | F: %zu",
+           g_mesh_loaded ? "yes" : "no",
+           g_loaded_mesh.vertices.size(),
+           g_loaded_mesh.faces.size());
+  label_row(ctx, widths, mesh_summary_text);
 
-  char mesh_vertices_text[128];
-  snprintf(mesh_vertices_text, sizeof(mesh_vertices_text),
-           "Vertices: %zu", g_loaded_mesh.vertices.size());
-  label_row(ctx, widths, mesh_vertices_text);
-
-  char mesh_faces_text[128];
-  snprintf(mesh_faces_text, sizeof(mesh_faces_text),
-           "Faces: %zu", g_loaded_mesh.faces.size());
-  label_row(ctx, widths, mesh_faces_text);
-
-  label_row(ctx, widths, g_mesh_status);
-  label_row(ctx, widths, g_mesh_path_used);
+  char mesh_file_text[128];
+  snprintf(mesh_file_text, sizeof(mesh_file_text),
+           "OBJ: simple_pyramid.obj");
+  label_row(ctx, widths, mesh_file_text);
 
   // Show one sample vertex/face to confirm the parsed data, not only the counts.
   if (g_mesh_loaded && !g_loaded_mesh.vertices.empty() && !g_loaded_mesh.faces.empty()) {
@@ -442,12 +452,12 @@ static void draw_mesh_loading_info(mu_Context *ctx, int *widths) {
 
     char first_vertex_text[128];
     snprintf(first_vertex_text, sizeof(first_vertex_text),
-             "First vertex: %.1f, %.1f, %.1f", v.x, v.y, v.z);
+             "Sample v: %.1f, %.1f, %.1f", v.x, v.y, v.z);
     label_row(ctx, widths, first_vertex_text);
 
     char first_face_text[128];
     snprintf(first_face_text, sizeof(first_face_text),
-             "First face: %d, %d, %d", f.v0, f.v1, f.v2);
+             "Sample f: %d, %d, %d", f.v0, f.v1, f.v2);
     label_row(ctx, widths, first_face_text);
   }
 }
@@ -607,7 +617,11 @@ static void render_background() {
     uint8_t g;
     uint8_t b;
 
-    if (g_checkerboard_mode) {
+    if (g_background_mode == BACKGROUND_PLAIN) {
+      r = 210;
+      g = 210;
+      b = 210;
+    } else if (g_background_mode == BACKGROUND_CHECKERBOARD) {
       int tile_size = (int)g_background_tile_size;
       if (tile_size < 10) tile_size = 10; // Avoid tiny checker cells
 
@@ -617,7 +631,7 @@ static void render_background() {
       r = checker ? 230 : 40;
       g = checker ? 230 : 80;
       b = checker ? 230 : 160;
-    } else {
+    } else if (g_background_mode == BACKGROUND_CIRCLES) {
       int animation_shift = g_background_animate ? g_frame_counter * 20 : 0;
 
       r = (uint8_t)(((distance_squared / 900) + animation_shift) % 256); // Wide red rings
@@ -627,6 +641,10 @@ static void render_background() {
       r = apply_color_intensity(r, g_background_color_intensity);
       g = apply_color_intensity(g, g_background_color_intensity);
       b = apply_color_intensity(b, g_background_color_intensity);
+    } else {
+      r = 255;
+      g = 255;
+      b = 255;
     }
 
     if (g_invert_colors) {
@@ -796,6 +814,8 @@ int main() {
 
   UIRenderer renderer(WIDTH, HEIGHT);
 
+  g_background_mode = BACKGROUND_PLAIN;
+
   // Load a small OBJ mesh once at startup
   g_mesh_loaded = load_default_mesh();
 
@@ -805,7 +825,7 @@ int main() {
         extern void ui_bridge_char_input(struct mfb_window *, unsigned int);
 
         if (c == 'p' || c == 'P') {
-          g_checkerboard_mode = !g_checkerboard_mode;
+          cycle_background_mode();
           return; // consume the shortcut key
         }
 
