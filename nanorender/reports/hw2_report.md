@@ -7,126 +7,68 @@
 
 ## Part 0: Introduction to GLM
 
-In this part, I integrated GLM into the project and verified that it works correctly.
+I integrated GLM to provide the 3D vectors and matrices needed for translation, rotation, and scaling.
 
-GLM is needed for this assignment because the next parts require 3D vectors, matrices, and transformations such as translation, rotation, and scaling.
+I updated the project configuration so that CMake fetches and links GLM with the application, then included it in `main.cpp`. I added a small test to verify that GLM vectors and transformation matrices work correctly in the running project.
 
-I updated the project configuration so that CMake fetches GLM and links it with the application.  
-Then I included GLM in `main.cpp` and added a small test to check that GLM vectors and transformation matrices work inside the running project.
-
-For the test, I used a 3D point with the values `(1.0, 2.0, 3.0)` and applied a translation of `+10.0` on the X axis.
-
-The expected result was:
-
-`(11.0, 2.0, 3.0)`
-
-This is correct because only the X coordinate changed, while the Y and Z coordinates stayed the same.
-
-At first, I displayed the result inside the GUI to make the test visible while the program was running.
-After continuing to Part 2, I removed the temporary Part 0 GUI display because GLM is now used directly in the mesh normalization code.
+I tested a translation of `+10.0` on the X axis of the point `(1.0, 2.0, 3.0)`. The result was `(11.0, 2.0, 3.0)`, confirming that only X changed while Y and Z remained unchanged.
 
 <img src="../assets/hw2/images/hw2_part0_glm_test.png" alt="Part 0 GLM test" width="320">
 
-After adding GLM, the project compiled and ran successfully, and the correct transformation result appeared in the GUI during the Part 0 check.
+I initially displayed this result in the GUI to confirm that GLM was working. I later removed the temporary test when GLM became part of the actual mesh calculations.
 
 ### Development Note
 
-While testing Part 0, I also checked the mouse input alignment after changing the window size and UI layout.
-
-The old Y-axis offsets that were used before were no longer needed, so I removed that calibration code.
-
-After this change, the mouse position matched the UI controls correctly.
-
-During this check, I also noticed a few possible UI improvements from the previous assignment, such as improving window behavior and making some controls more context-aware.
-
-I decided to keep Part 0 focused on the GLM setup and return to these UI improvements later before continuing with the next parts.
+While testing Part 0, I rechecked the mouse alignment after resizing the application window and adjusting the UI layout. I found that the earlier mismatch was partly caused by the window being too large for my screen, so the old UI and line-drawing Y-axis offsets were no longer needed. After removing them, the mouse input aligned correctly with the visible controls. This led me to revisit Assignment 1 and make several UI improvements, including replacing the unused popup with the `Window Controls` panel and displaying only the controls relevant to the active background. The full Assignment 1 implementation and improvements are documented in its report, allowing this report to remain focused on GLM, the Assignment 2 requirements, and related work.
 
 ---
 
 ## Part 1: Loading and Inspecting 3D Data
 
-In this part, I loaded a simple `.obj` mesh file and stored its data in memory.
-
-I created a small square pyramid test model called `simple_pyramid.obj` with 5 vertices and 6 triangular faces.
-
-I used a square pyramid model because it is small and easy to verify manually. It has 5 vertices and 6 triangular faces, so it is suitable for checking that the OBJ loader reads the correct number of vertices and faces.
+In this part, I loaded a simple `.obj` mesh file and stored its data in memory.  
+For testing, I created `simple_pyramid.obj`, a small square pyramid with 5 vertices and 6 triangular faces.
 
 <img src="../assets/hw2/images/part1_obj_file.png" alt="Part 1 OBJ file" width="300">
 
-In `main.cpp`, I added a `Mesh` structure to store the list of vertices and faces.
-Each vertex is stored as a `glm::vec3`, and each face stores three vertex indices.
+In `main.cpp`, I added a `Mesh` structure that stores vertices as `glm::vec3` values and triangular faces as three vertex indices.  
+The OBJ loader reads the file line by line, storing `v` lines as vertices and `f` lines as faces.  
+Because OBJ uses 1-based indices while C++ vectors use 0-based indices, I subtract 1 from each face index before storing it.
 
-The OBJ loader reads the file line by line.
-Lines that start with `v` are stored as vertices, and lines that start with `f` are stored as faces.
-
-OBJ files use 1-based indices, while C++ vectors use 0-based indices, so I subtract 1 from each face index before storing it.
-
-To check the loader, I displayed the result in the GUI.
+To verify the loader, I displayed the mesh information in the GUI:
 
 <img src="../assets/hw2/images/part1_obj_loading.png" alt="Part 1 OBJ loading test" width="380">
 
-The GUI shows that the file was loaded successfully with 5 vertices and 6 faces, which matches the content of the `.obj` file.
-
-The first face appears as `0, 1, 2` because the original OBJ face `1, 2, 3` was converted to C++ vector indexing.
+The file loaded with 5 vertices and 6 faces, matching the `.obj` file.  
+The first face appears as `0, 1, 2` because the OBJ indices `1, 2, 3` were converted to C++ vector indexing.
 
 ---
 
 ## Code Organization Note
 
-After finishing Part 1, I went back to review the code based on the code session comments and the teacher's suggestion to use the DRY principle.
-
-I reorganized the code without changing its behavior. I removed old unused demo/debug code, grouped related variables together, and moved repeated UI code into helper functions.
-
-I also made the code easier to continue by keeping repeated values, such as window titles, UI colors, default window positions, and OBJ paths, in one place.
-
-After the cleanup, I checked that the project still compiles and that the OBJ loading and viewport transform information still display correctly.
+After Part 1, I reviewed the code based on the code-session comments and the recommendation to apply the DRY principle.  
+We discussed different ways to organize a source file, such as grouping global parameters near the top or keeping them close to the functions that use them. Although neither approach is always better, I decided that grouping related code would make the growing file easier to follow.  
+Without changing the program's behavior, I removed unused demo and debug code, grouped related variables, moved repeated UI code into helper functions, and centralized values such as window titles, UI colors, default positions, and OBJ paths.  
+After the cleanup, I rebuilt and tested the project to confirm that OBJ loading and the viewport information still worked correctly.
 
 ---
 
 ## Part 2: Normalization and the Viewport Transform
 
-In this part, I added a temporary viewport transform for the loaded mesh.
+I added a temporary viewport transform that fits the loaded mesh inside the framebuffer, even when its original `.obj` coordinates are very small, very large, or not centered.
 
-The goal is to make the mesh fit nicely inside the framebuffer, even if the original `.obj` coordinates are very small, very large, or not centered.
+The transformation is calculated in five steps:
 
-First, I calculate the bounding box of the mesh by finding the minimum and maximum `x`, `y`, and `z` values of all vertices.
+1. **Bounding box:** I check every vertex to find the minimum and maximum `x`, `y`, and `z` values. These values describe the full range occupied by the mesh.
 
-Then I calculate the center of the mesh:
+2. **Mesh center:** I calculate the midpoint of the bounding box using `center = (min + max) / 2`.
 
-```text
-center = (min + max) / 2
-```
+3. **Uniform scale:** I calculate the bounding-box dimensions using `size = max - min`, then select the largest dimension with `max_extent = max(size.x, size.y, size.z)`. I use `scale = 600 / max_extent`, where `600` is the target mesh size in pixels. Using the same scale on every axis keeps the original proportions and leaves space around the model.
 
-I also calculate the size of the bounding box and choose the largest dimension:
+4. **Translation:** I move the scaled mesh center to the framebuffer center using `translation = framebuffer_center - center * scale`.
 
-```text
-size = max - min
-max_extent = max(size.x, size.y, size.z)
-```
+5. **Final mapping:** I transform each original vertex using `mapped_position = original_position * scale + translation`.
 
-I use one uniform scale value for all axes so the mesh keeps its original proportions and does not stretch.
-
-```text
-scale = 600 / max_extent
-```
-
-After that, I calculate a translation vector that moves the scaled mesh to the center of the framebuffer:
-
-```text
-translation = framebuffer_center - center * scale
-```
-
-The final mapping is:
-
-```text
-mapped_position = original_position * scale + translation
-```
-
-I displayed the bounding box values, center, scale, translation, and the first mapped vertex in the GUI to check that the calculation works correctly.
-
-This does not draw the mesh yet. It only prepares the normalized screen coordinates that will be used later for the wireframe rendering.
-
-The following screenshot shows the calculated viewport transform values in the GUI:
+To verify the calculations, I displayed the bounding box, center, scale, translation, and first mapped vertex in the GUI. At this stage, the transform only prepared the normalized screen coordinates; wireframe rendering was added in Part 3.
 
 <img src="../assets/hw2/images/part2_viewport_transform.png" alt="Part 2 viewport transform" width="400">
 
@@ -136,66 +78,60 @@ For the square pyramid model, the bounding box is from `-1` to `1` on each axis.
 
 ## Prework Before Part 3
 
-Before starting the wireframe rendering step, I prepared the display area so the mesh will be easier to see.
-I added a plain gray background as the default mode, because a wireframe will be clearer on a simple background than on the colorful animated pattern.
-The darker inverted shade is enabled by default because it shows both light and dark drawing colors clearly, and pressing `I` toggles back to the lighter gray shade.
+Before Part 3, I added a plain gray background to make the wireframe easier to see. The darker inverted shade is the default because it shows both light and dark drawing colors clearly, while `I` switches to the lighter shade.
 
-The `P` key now cycles between the available background modes in this order:
+The `P` key cycles through:
 
-```text
-Plain -> Circles -> Checkerboard
-```
+`Plain -> Circles -> Checkerboard`
 
-When the background is plain, the extra background controls are hidden because there is no tile size, color intensity, or animation to adjust.
-When the background is changed to circles or checkerboard, the relevant slider and animation checkbox appear again.
+Plain mode hides the unused tile-size, color-intensity, and animation controls. The relevant controls reappear when circles or checkerboard is selected.
 
 ---
 
 ## Part 3: Orthographic Projection and Wireframe Rendering
 
-For Part 3, I used a simple orthographic projection. After the model vertices are normalized by the Part 2 viewport transform, I project each 3D vertex to 2D by keeping only the `x` and `y` coordinates and ignoring `z`.
+### Orthographic Projection
 
-The framebuffer uses screen coordinates where `y` increases downward, while the model coordinates treat positive `y` as upward. Because of that, I flip the screen `y` value only inside the Part 3 projection helper:
+After applying the Part 2 viewport transform, I orthographically project each vertex into 2D by keeping `x` and `y` and dropping `z`. Because screen `y` increases downward, I flip it only in the Part 3 projection helper:
 
-```text
-screen_x = mapped_x
-screen_y = (HEIGHT - 1) - mapped_y
-```
+`screen_x = mapped_x`  
+`screen_y = (HEIGHT - 1) - mapped_y`
 
-For each triangular face in the mesh, I retrieve its three vertices, project them to screen coordinates, and draw the three edges with the Assignment 1 `draw_line` function:
+### Wireframe Rendering
 
-```text
-v0 -> v1
-v1 -> v2
-v2 -> v0
-```
+For each triangular face, I retrieve and project its three vertices, then use the Assignment 1 `draw_line` function to draw the edges `v0 -> v1`, `v1 -> v2`, and `v2 -> v0`. This creates a static wireframe of the loaded OBJ mesh above the plain background.
 
-This creates a static wireframe drawing of the loaded OBJ mesh on top of the plain background.
+### Testing Different Models
 
-I first tested the wireframe renderer with the simple pyramid model:
+I tested the same renderer with three models to compare how their geometry appears after dropping `z`:
 
-<img src="../assets/hw2/images/part3_pyramid_wireframe.png" alt="Part 3 pyramid wireframe" width="380">
+<table>
+  <tr>
+    <th>Simple pyramid</th>
+    <th>Regular cube</th>
+    <th>Angled box</th>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw2/images/part3_pyramid_wireframe.png" alt="Part 3 pyramid wireframe" width="300"></td>
+    <td><img src="../assets/hw2/images/part3_regular_cube_wireframe.png" alt="Part 3 regular cube wireframe" width="300"></td>
+    <td><img src="../assets/hw2/images/part3_angled_box_wireframe.png" alt="Part 3 angled box wireframe" width="300"></td>
+  </tr>
+</table>
 
-This result is correct, but it looks like a flat triangle because the orthographic projection drops the `z` coordinate. The pyramid base vertices differ in `z`, but they share the same lower `y` value, so the base collapses into one horizontal line in the 2D view.
+The pyramid looks like a triangle because its depth is lost. The cube's front and back faces overlap because they share the same `x` and `y` coordinates. The angled box is clearest because its shifted back face keeps visible depth after projection. The diagonal lines come from the triangular OBJ faces.
 
-I also tested a regular cube without any angled offset:
+I kept the regular cube as the default because it clearly shows this projection limitation before Part 4.
 
-<img src="../assets/hw2/images/part3_regular_cube_wireframe.png" alt="Part 3 regular cube wireframe" width="380">
+### Viewer Organization Improvement
 
-This drawing is also correct, but it is still not very clear as a 3D object. Since the front and back cube faces have the same `x` and `y` coordinates, dropping `z` places them directly on top of each other. The diagonal line appears because the square faces are stored as triangles.
+After Part 3, I combined the Part 1 loading information and Part 2 viewport values into one compact `Mesh` section.  
+I removed the no-longer-needed sample vertex and face, but kept the load status, vertex and face counts, bounds, center, scale, and translation.  
+I also added a model selector, making the panel clearer and leaving space for upcoming controls.
 
-All of the test OBJ models used in this part are saved in:
+<img src="../assets/hw2/images/part3_model_selector.png" alt="Compact mesh information and model selector" width="450">
 
-```text
-nanorender/assets/hw2/models/
-```
+### Interactive Model Selection Demo
 
-The model that the program opens by default is selected in `main.cpp` using `DEFAULT_MESH_NAME` and `DEFAULT_MESH_PATHS`.
+The models are stored in `nanorender/assets/hw2/models/` and defined in the `MESH_OPTIONS` list. The following demo shows the selector changing the model and immediately updating its information and wireframe:
 
-This model has an angled front and back face. The back face is shifted in both `x` and `y`, so when `z` is dropped, the wireframe still shows visible depth on the 2D screen.
-
-The final Part 3 wireframe result is shown below:
-
-<img src="../assets/hw2/images/part3_angled_box_wireframe.png" alt="Part 3 angled box wireframe" width="380">
-
-This screenshot makes the orthographic projection easier to understand because the model still looks like a 3D wireframe after being drawn on the 2D framebuffer. The visible diagonal lines come from the triangular faces used by the OBJ mesh.
+<img src="../assets/hw2/images/part3_model_selector_demo.gif" alt="Switching between the Part 3 OBJ models" width="400">

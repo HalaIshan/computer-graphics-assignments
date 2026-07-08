@@ -54,6 +54,11 @@ struct ViewportTransform {
   bool valid;
 };
 
+struct MeshOption {
+  const char *name;
+  const char *paths[3];
+};
+
 struct ScreenPoint {
   int x;
   int y;
@@ -69,11 +74,22 @@ static const char *WIDGETS_WINDOW_TITLE = "Widgets";                  // Left UI
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
 
-static const char *DEFAULT_MESH_NAME = "angled_box.obj"; // Clearer Part 3 wireframe test mesh
-static const char *DEFAULT_MESH_PATHS[] = {
-    "assets/hw2/models/angled_box.obj",      // Running from nanorender
-    "../assets/hw2/models/angled_box.obj",   // Running from build folder
-    "../../assets/hw2/models/angled_box.obj"}; // Running from nested build folder
+static const MeshOption MESH_OPTIONS[] = {
+    {"simple_pyramid.obj",
+     {"assets/hw2/models/simple_pyramid.obj",
+      "../assets/hw2/models/simple_pyramid.obj",
+      "../../assets/hw2/models/simple_pyramid.obj"}},
+    {"regular_cube.obj",
+     {"assets/hw2/models/regular_cube.obj",
+      "../assets/hw2/models/regular_cube.obj",
+      "../../assets/hw2/models/regular_cube.obj"}},
+    {"angled_box.obj",
+     {"assets/hw2/models/angled_box.obj",
+      "../assets/hw2/models/angled_box.obj",
+      "../../assets/hw2/models/angled_box.obj"}}};
+
+static const int MESH_OPTION_COUNT = sizeof(MESH_OPTIONS) / sizeof(MESH_OPTIONS[0]);
+static const int DEFAULT_MESH_INDEX = 1; // Start with the regular cube comparison mesh
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};            // x, y, width, height
 static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 20, 360, 450};           // x, y, width, height
@@ -102,6 +118,8 @@ static bool g_mesh_loaded = false;
 static char g_mesh_status[256] = "Mesh not loaded yet"; // Last load result shown in UI
 static char g_mesh_path_used[256] = "";                 // Path that successfully loaded
 static ViewportTransform g_viewport_transform = {};
+static int g_selected_mesh_index = DEFAULT_MESH_INDEX;
+static bool g_mesh_selector_open = false;
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -315,6 +333,8 @@ static void slider_row(mu_Context *ctx, int *widths, const char *label,
   mu_slider(ctx, value, low, high);
 }
 
+static bool load_mesh_option(int option_index);
+
 static void draw_keyboard_controls(mu_Context *ctx, int *widths) {
   mu_Color keyboard_color = KEYBOARD_COLOR;
   colored_label_row(ctx, widths, "Keyboard controls:", keyboard_color);
@@ -391,11 +411,43 @@ static ScreenPoint project_vertex_orthographic(const glm::vec3 &vertex,
       (int)std::lround((HEIGHT - 1) - mapped.y)}; // Flip y only for screen drawing
 }
 
-static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
-  colored_label_row(ctx, widths, "Viewport transform:", MESH_COLOR);
+static void draw_mesh_controls(mu_Context *ctx, int *widths) {
+  mu_Color mesh_color = MESH_COLOR;
+  colored_label_row(ctx, widths, "Mesh:", mesh_color);
+
+  char selector_text[128];
+  snprintf(selector_text, sizeof(selector_text),
+           "Model: %s", MESH_OPTIONS[g_selected_mesh_index].name);
+
+  if (button_row(ctx, widths, selector_text)) {
+    g_mesh_selector_open = !g_mesh_selector_open;
+  }
+
+  if (g_mesh_selector_open) {
+    for (int i = 0; i < MESH_OPTION_COUNT; i++) {
+      char option_text[128];
+      snprintf(option_text, sizeof(option_text),
+               "%s%s",
+               i == g_selected_mesh_index ? "> " : "  ",
+               MESH_OPTIONS[i].name);
+
+      if (button_row(ctx, widths, option_text)) {
+        load_mesh_option(i);
+        g_mesh_selector_open = false;
+      }
+    }
+  }
+
+  char mesh_summary_text[128];
+  snprintf(mesh_summary_text, sizeof(mesh_summary_text),
+           "Loaded: %s | V: %zu | F: %zu",
+           g_mesh_loaded ? "yes" : "no",
+           g_loaded_mesh.vertices.size(),
+           g_loaded_mesh.faces.size());
+  label_row(ctx, widths, mesh_summary_text);
 
   if (!g_viewport_transform.valid) {
-    label_row(ctx, widths, "Transform: not available");
+    label_row(ctx, widths, "Viewport: not available");
     return;
   }
 
@@ -403,7 +455,7 @@ static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
 
   char bounds_text[160];
   snprintf(bounds_text, sizeof(bounds_text),
-           "Bounds: %.1f %.1f %.1f to %.1f %.1f %.1f",
+           "Bounds: %.1f %.1f %.1f -> %.1f %.1f %.1f",
            box.min.x, box.min.y, box.min.z,
            box.max.x, box.max.y, box.max.z);
   label_row(ctx, widths, bounds_text);
@@ -428,53 +480,6 @@ static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
            g_viewport_transform.translation.y,
            g_viewport_transform.translation.z);
   label_row(ctx, widths, translation_text);
-
-  if (!g_loaded_mesh.vertices.empty()) {
-    glm::vec3 transformed_vertex =
-        apply_viewport_transform(g_loaded_mesh.vertices[0], g_viewport_transform);
-
-    char transformed_vertex_text[128];
-    snprintf(transformed_vertex_text, sizeof(transformed_vertex_text),
-             "First mapped: %.1f, %.1f, %.1f",
-             transformed_vertex.x,
-             transformed_vertex.y,
-             transformed_vertex.z);
-    label_row(ctx, widths, transformed_vertex_text);
-  }
-}
-
-static void draw_mesh_loading_info(mu_Context *ctx, int *widths) {
-  mu_Color mesh_color = MESH_COLOR;
-  colored_label_row(ctx, widths, "Mesh loading:", mesh_color);
-
-  char mesh_summary_text[128];
-  snprintf(mesh_summary_text, sizeof(mesh_summary_text),
-           "Loaded: %s | V: %zu | F: %zu",
-           g_mesh_loaded ? "yes" : "no",
-           g_loaded_mesh.vertices.size(),
-           g_loaded_mesh.faces.size());
-  label_row(ctx, widths, mesh_summary_text);
-
-  char mesh_file_text[128];
-  snprintf(mesh_file_text, sizeof(mesh_file_text),
-           "OBJ: %s", DEFAULT_MESH_NAME);
-  label_row(ctx, widths, mesh_file_text);
-
-  // Show one sample vertex/face to confirm the parsed data, not only the counts.
-  if (g_mesh_loaded && !g_loaded_mesh.vertices.empty() && !g_loaded_mesh.faces.empty()) {
-    const glm::vec3 &v = g_loaded_mesh.vertices[0];
-    const Face &f = g_loaded_mesh.faces[0];
-
-    char first_vertex_text[128];
-    snprintf(first_vertex_text, sizeof(first_vertex_text),
-             "Sample v: %.1f, %.1f, %.1f", v.x, v.y, v.z);
-    label_row(ctx, widths, first_vertex_text);
-
-    char first_face_text[128];
-    snprintf(first_face_text, sizeof(first_face_text),
-             "Sample f: %d, %d, %d", f.v0, f.v1, f.v2);
-    label_row(ctx, widths, first_face_text);
-  }
 }
 
 static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
@@ -483,14 +488,13 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
 
     draw_keyboard_controls(ctx, widths);
 
-    spacer_row(ctx, widths, 8);
-    draw_background_controls(ctx, widths);
+    if (g_background_mode != BACKGROUND_PLAIN) {
+      spacer_row(ctx, widths, 8);
+      draw_background_controls(ctx, widths);
+    }
 
     spacer_row(ctx, widths, 8);
-    draw_mesh_loading_info(ctx, widths);
-
-    spacer_row(ctx, widths, 8);
-    draw_viewport_transform_info(ctx, widths);
+    draw_mesh_controls(ctx, widths);
 
     if (button_row(ctx, widths, "Quit")) {
       *quit_requested = true;
@@ -819,15 +823,27 @@ static bool load_obj_file(const char *filename, Mesh &mesh, char *status, int st
   return true;
 }
 
-static bool load_default_mesh() {
-  for (const char *path : DEFAULT_MESH_PATHS) {
-    if (load_obj_file(path, g_loaded_mesh, g_mesh_status, sizeof(g_mesh_status))) {
+static bool load_mesh_option(int option_index) {
+  if (option_index < 0 || option_index >= MESH_OPTION_COUNT) {
+    return false;
+  }
+
+  Mesh loaded_mesh;
+  const MeshOption &option = MESH_OPTIONS[option_index];
+
+  for (const char *path : option.paths) {
+    if (load_obj_file(path, loaded_mesh, g_mesh_status, sizeof(g_mesh_status))) {
+      g_loaded_mesh = loaded_mesh;
+      g_mesh_loaded = true;
+      g_selected_mesh_index = option_index;
       snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "%s", path);
       g_viewport_transform = calculate_viewport_transform(g_loaded_mesh);
       return true;
     }
   }
 
+  g_loaded_mesh = Mesh();
+  g_mesh_loaded = false;
   snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "No valid path found");
   g_viewport_transform = {};
   return false;
@@ -858,7 +874,7 @@ int main() {
   g_background_mode = BACKGROUND_PLAIN;
 
   // Load a small OBJ mesh once at startup
-  g_mesh_loaded = load_default_mesh();
+  g_mesh_loaded = load_mesh_option(DEFAULT_MESH_INDEX);
 
   // Set up char input callback for textbox input
   mfb_set_char_input_callback(
