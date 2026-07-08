@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <cmath>
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -53,6 +54,11 @@ struct ViewportTransform {
   bool valid;
 };
 
+struct ScreenPoint {
+  int x;
+  int y;
+};
+
 enum BackgroundMode {
   BACKGROUND_PLAIN,
   BACKGROUND_CIRCLES,
@@ -63,10 +69,11 @@ static const char *WIDGETS_WINDOW_TITLE = "Widgets";                  // Left UI
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
 
+static const char *DEFAULT_MESH_NAME = "angled_box.obj"; // Clearer Part 3 wireframe test mesh
 static const char *DEFAULT_MESH_PATHS[] = {
-    "assets/hw2/models/simple_pyramid.obj",      // Running from nanorender
-    "../assets/hw2/models/simple_pyramid.obj",   // Running from build folder
-    "../../assets/hw2/models/simple_pyramid.obj"}; // Running from nested build folder
+    "assets/hw2/models/angled_box.obj",      // Running from nanorender
+    "../assets/hw2/models/angled_box.obj",   // Running from build folder
+    "../../assets/hw2/models/angled_box.obj"}; // Running from nested build folder
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};            // x, y, width, height
 static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 20, 360, 450};           // x, y, width, height
@@ -376,6 +383,14 @@ static glm::vec3 apply_viewport_transform(const glm::vec3 &vertex,
   return vertex * transform.scale + transform.translation;
 }
 
+static ScreenPoint project_vertex_orthographic(const glm::vec3 &vertex,
+                                               const ViewportTransform &transform) {
+  glm::vec3 mapped = apply_viewport_transform(vertex, transform);
+  return {
+      (int)std::lround(mapped.x),
+      (int)std::lround((HEIGHT - 1) - mapped.y)}; // Flip y only for screen drawing
+}
+
 static void draw_viewport_transform_info(mu_Context *ctx, int *widths) {
   colored_label_row(ctx, widths, "Viewport transform:", MESH_COLOR);
 
@@ -442,7 +457,7 @@ static void draw_mesh_loading_info(mu_Context *ctx, int *widths) {
 
   char mesh_file_text[128];
   snprintf(mesh_file_text, sizeof(mesh_file_text),
-           "OBJ: simple_pyramid.obj");
+           "OBJ: %s", DEFAULT_MESH_NAME);
   label_row(ctx, widths, mesh_file_text);
 
   // Show one sample vertex/face to confirm the parsed data, not only the counts.
@@ -671,6 +686,32 @@ static void draw_line_overlay() {
   }
 }
 
+static uint32_t get_wireframe_color() {
+  return g_invert_colors ? MFB_RGB(245, 245, 245) : MFB_RGB(20, 20, 20);
+}
+
+static void draw_mesh_wireframe() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid) {
+    return;
+  }
+
+  uint32_t wireframe_color = get_wireframe_color();
+
+  for (const Face &face : g_loaded_mesh.faces) {
+    const glm::vec3 &v0 = g_loaded_mesh.vertices[face.v0];
+    const glm::vec3 &v1 = g_loaded_mesh.vertices[face.v1];
+    const glm::vec3 &v2 = g_loaded_mesh.vertices[face.v2];
+
+    ScreenPoint p0 = project_vertex_orthographic(v0, g_viewport_transform);
+    ScreenPoint p1 = project_vertex_orthographic(v1, g_viewport_transform);
+    ScreenPoint p2 = project_vertex_orthographic(v2, g_viewport_transform);
+
+    draw_line(p0.x, p0.y, p1.x, p1.y, wireframe_color);
+    draw_line(p1.x, p1.y, p2.x, p2.y, wireframe_color);
+    draw_line(p2.x, p2.y, p0.x, p0.y, wireframe_color);
+  }
+}
+
 // OBJ loading helpers
 static bool parse_obj_face_index(const std::string &token, int &index) {
   // OBJ face tokens can look like:
@@ -871,6 +912,7 @@ int main() {
     }
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
+    draw_mesh_wireframe();
     draw_line_overlay();
 
     // 4. UI Rendering

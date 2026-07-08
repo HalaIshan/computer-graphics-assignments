@@ -25,7 +25,7 @@ This is correct because only the X coordinate changed, while the Y and Z coordin
 At first, I displayed the result inside the GUI to make the test visible while the program was running.
 After continuing to Part 2, I removed the temporary Part 0 GUI display because GLM is now used directly in the mesh normalization code.
 
-![Part 0 GLM test](../assets/hw2/images/hw2_part0_glm_test.png)
+<img src="../assets/hw2/images/hw2_part0_glm_test.png" alt="Part 0 GLM test" width="320">
 
 After adding GLM, the project compiled and ran successfully, and the correct transformation result appeared in the GUI during the Part 0 check.
 
@@ -51,7 +51,7 @@ I created a small square pyramid test model called `simple_pyramid.obj` with 5 v
 
 I used a square pyramid model because it is small and easy to verify manually. It has 5 vertices and 6 triangular faces, so it is suitable for checking that the OBJ loader reads the correct number of vertices and faces.
 
-![Part 1 OBJ file](../assets/hw2/images/part1_obj_file.png)
+<img src="../assets/hw2/images/part1_obj_file.png" alt="Part 1 OBJ file" width="300">
 
 In `main.cpp`, I added a `Mesh` structure to store the list of vertices and faces.
 Each vertex is stored as a `glm::vec3`, and each face stores three vertex indices.
@@ -63,7 +63,7 @@ OBJ files use 1-based indices, while C++ vectors use 0-based indices, so I subtr
 
 To check the loader, I displayed the result in the GUI.
 
-![Part 1 OBJ loading test](../assets/hw2/images/part1_obj_loading.png)
+<img src="../assets/hw2/images/part1_obj_loading.png" alt="Part 1 OBJ loading test" width="380">
 
 The GUI shows that the file was loaded successfully with 5 vertices and 6 faces, which matches the content of the `.obj` file.
 
@@ -128,7 +128,7 @@ This does not draw the mesh yet. It only prepares the normalized screen coordina
 
 The following screenshot shows the calculated viewport transform values in the GUI:
 
-![Part 2 viewport transform](../assets/hw2/images/part2_viewport_transform.png)
+<img src="../assets/hw2/images/part2_viewport_transform.png" alt="Part 2 viewport transform" width="400">
 
 For the square pyramid model, the bounding box is from `-1` to `1` on each axis. This gives a center of `(0, 0, 0)`, a scale of `300`, and a translation of `(800, 450, 0)`, which places the normalized model around the center of the framebuffer.
 
@@ -148,3 +148,54 @@ Plain -> Circles -> Checkerboard
 
 When the background is plain, the extra background controls are hidden because there is no tile size, color intensity, or animation to adjust.
 When the background is changed to circles or checkerboard, the relevant slider and animation checkbox appear again.
+
+---
+
+## Part 3: Orthographic Projection and Wireframe Rendering
+
+For Part 3, I used a simple orthographic projection. After the model vertices are normalized by the Part 2 viewport transform, I project each 3D vertex to 2D by keeping only the `x` and `y` coordinates and ignoring `z`.
+
+The framebuffer uses screen coordinates where `y` increases downward, while the model coordinates treat positive `y` as upward. Because of that, I flip the screen `y` value only inside the Part 3 projection helper:
+
+```text
+screen_x = mapped_x
+screen_y = (HEIGHT - 1) - mapped_y
+```
+
+For each triangular face in the mesh, I retrieve its three vertices, project them to screen coordinates, and draw the three edges with the Assignment 1 `draw_line` function:
+
+```text
+v0 -> v1
+v1 -> v2
+v2 -> v0
+```
+
+This creates a static wireframe drawing of the loaded OBJ mesh on top of the plain background.
+
+I first tested the wireframe renderer with the simple pyramid model:
+
+<img src="../assets/hw2/images/part3_pyramid_wireframe.png" alt="Part 3 pyramid wireframe" width="380">
+
+This result is correct, but it looks like a flat triangle because the orthographic projection drops the `z` coordinate. The pyramid base vertices differ in `z`, but they share the same lower `y` value, so the base collapses into one horizontal line in the 2D view.
+
+I also tested a regular cube without any angled offset:
+
+<img src="../assets/hw2/images/part3_regular_cube_wireframe.png" alt="Part 3 regular cube wireframe" width="380">
+
+This drawing is also correct, but it is still not very clear as a 3D object. Since the front and back cube faces have the same `x` and `y` coordinates, dropping `z` places them directly on top of each other. The diagonal line appears because the square faces are stored as triangles.
+
+All of the test OBJ models used in this part are saved in:
+
+```text
+nanorender/assets/hw2/models/
+```
+
+The model that the program opens by default is selected in `main.cpp` using `DEFAULT_MESH_NAME` and `DEFAULT_MESH_PATHS`.
+
+This model has an angled front and back face. The back face is shifted in both `x` and `y`, so when `z` is dropped, the wireframe still shows visible depth on the 2D screen.
+
+The final Part 3 wireframe result is shown below:
+
+<img src="../assets/hw2/images/part3_angled_box_wireframe.png" alt="Part 3 angled box wireframe" width="380">
+
+This screenshot makes the orthographic projection easier to understand because the model still looks like a 3D wireframe after being drawn on the 2D framebuffer. The visible diagonal lines come from the triangular faces used by the OBJ mesh.
