@@ -135,3 +135,22 @@ I also added a model selector, making the panel clearer and leaving space for up
 The models are stored in `nanorender/assets/hw2/models/` and defined in the `MESH_OPTIONS` list. The following demo shows the selector changing the model and immediately updating its information and wireframe:
 
 <img src="../assets/hw2/images/part3_model_selector_demo.gif" alt="Switching between the Part 3 OBJ models" width="400">
+
+---
+
+## Part 4: Transformation Matrices and Immediate Mode GUI
+
+For Part 4, I added an Immediate Mode GUI for editing transformation parameters. The controls include Local and World values for translation, rotation, and scale on the X, Y, and Z axes.
+
+The first selector chooses the transformation space: `Local` or `World`. The second selector chooses the operation: `Translation`, `Rotation`, or `Scale`. The `Editing` label shows the active choice, and switching between options keeps the previous values saved.
+
+Each selected operation has X, Y, and Z sliders with a Reset button beside each one. Translation and rotation reset to `0`, while scale resets to `1`. I also added `Reset All` for every transform value and a `Uniform scale` slider to resize the whole model while keeping its proportions.
+
+The slider ranges are:
+`Translation: -2 to 2`
+`Rotation: -180 to 180 degrees`
+`Scale: 0.1 to 2`
+
+At this stage, the GUI stores the transformation values. The actual Model Matrix calculation and applying the transformations to the mesh are completed in Part 5.
+
+<img src="../assets/hw2/images/part4_transform_controls.png" alt="Part 4 transformation controls" width="450">

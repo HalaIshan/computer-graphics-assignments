@@ -59,6 +59,12 @@ struct MeshOption {
   const char *paths[3];
 };
 
+struct TransformParameters {
+  glm::vec3 translation;
+  glm::vec3 rotation_degrees;
+  glm::vec3 scale;
+};
+
 struct ScreenPoint {
   int x;
   int y;
@@ -70,7 +76,18 @@ enum BackgroundMode {
   BACKGROUND_CHECKERBOARD
 };
 
-static const char *WIDGETS_WINDOW_TITLE = "Widgets";                  // Left UI panel
+enum TransformSpace {
+  TRANSFORM_LOCAL,
+  TRANSFORM_WORLD
+};
+
+enum TransformOperation {
+  TRANSFORM_TRANSLATION,
+  TRANSFORM_ROTATION,
+  TRANSFORM_SCALE
+};
+
+static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
 
@@ -91,13 +108,21 @@ static const MeshOption MESH_OPTIONS[] = {
 static const int MESH_OPTION_COUNT = sizeof(MESH_OPTIONS) / sizeof(MESH_OPTIONS[0]);
 static const int DEFAULT_MESH_INDEX = 1; // Start with the regular cube comparison mesh
 
-static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};            // x, y, width, height
-static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 20, 360, 450};           // x, y, width, height
-static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {930, 20, 260, 150};   // x, y, width, height
+static const float TRANSLATION_MIN = -2.0f;
+static const float TRANSLATION_MAX = 2.0f;
+static const float ROTATION_MIN = -180.0f;
+static const float ROTATION_MAX = 180.0f;
+static const float SCALE_MIN = 0.1f;
+static const float SCALE_MAX = 2.0f;
+
+static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
+static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 160};   // Upper right
+static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 200, 360, 450};           // Below window controls
 
 static const mu_Color KEYBOARD_COLOR = {100, 200, 255, 255};         // Light blue
 static const mu_Color BACKGROUND_COLOR = {180, 255, 180, 255};       // Light green
 static const mu_Color MESH_COLOR = {200, 180, 255, 255};             // Light purple
+static const mu_Color TRANSFORM_COLOR = {255, 220, 120, 255};        // Warm yellow
 static const mu_Color LINE_TOOLS_COLOR = {255, 180, 120, 255};       // Soft orange
 static const mu_Color WINDOW_CONTROLS_COLOR = {220, 220, 255, 255};  // Pale blue
 
@@ -120,6 +145,15 @@ static char g_mesh_path_used[256] = "";                 // Path that successfull
 static ViewportTransform g_viewport_transform = {};
 static int g_selected_mesh_index = DEFAULT_MESH_INDEX;
 static bool g_mesh_selector_open = false;
+
+// Part 4 transformation state
+static TransformParameters g_local_transform = {
+    glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f)};
+static TransformParameters g_world_transform = {
+    glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f)};
+static TransformSpace g_transform_space = TRANSFORM_LOCAL;
+static TransformOperation g_transform_operation = TRANSFORM_TRANSLATION;
+static float g_model_size = 1.0f; // Uniform size multiplier for the whole model
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -216,6 +250,7 @@ static bool is_mouse_over_ui_window(int x, int y) {
       point_inside_rect(x, y, g_widgets_window_rect)) {
     return true;
   }
+
 
   if (g_canvas_window_open &&
       point_inside_rect(x, y, g_canvas_window_rect)) {
@@ -333,6 +368,28 @@ static void slider_row(mu_Context *ctx, int *widths, const char *label,
   mu_slider(ctx, value, low, high);
 }
 
+static void axis_slider_row(mu_Context *ctx, const char *axis,
+                            float *value, float low, float high,
+                            float default_value) {
+  int widths[] = {24, 320, 80};
+  mu_layout_row(ctx, 3, widths, 0);
+  mu_label(ctx, axis);
+  mu_slider(ctx, value, low, high);
+  if (mu_button(ctx, "Reset")) {
+    *value = default_value;
+  }
+}
+
+static void uniform_scale_row(mu_Context *ctx) {
+  int widths[] = {112, 232, 80};
+  mu_layout_row(ctx, 3, widths, 0);
+  mu_label(ctx, "Uniform scale:");
+  mu_slider(ctx, &g_model_size, SCALE_MIN, SCALE_MAX);
+  if (mu_button(ctx, "Reset")) {
+    g_model_size = 1.0f;
+  }
+}
+
 static bool load_mesh_option(int option_index);
 
 static void draw_keyboard_controls(mu_Context *ctx, int *widths) {
@@ -411,6 +468,46 @@ static ScreenPoint project_vertex_orthographic(const glm::vec3 &vertex,
       (int)std::lround((HEIGHT - 1) - mapped.y)}; // Flip y only for screen drawing
 }
 
+static void reset_transform(TransformParameters &transform) {
+  transform.translation = glm::vec3(0.0f);
+  transform.rotation_degrees = glm::vec3(0.0f);
+  transform.scale = glm::vec3(1.0f);
+}
+
+static void reset_all_transforms() {
+  reset_transform(g_local_transform);
+  reset_transform(g_world_transform);
+  g_model_size = 1.0f;
+}
+
+static TransformParameters &selected_transform() {
+  return g_transform_space == TRANSFORM_LOCAL
+             ? g_local_transform
+             : g_world_transform;
+}
+
+static glm::vec3 &selected_transform_values() {
+  TransformParameters &transform = selected_transform();
+
+  if (g_transform_operation == TRANSFORM_ROTATION) {
+    return transform.rotation_degrees;
+  }
+
+  if (g_transform_operation == TRANSFORM_SCALE) {
+    return transform.scale;
+  }
+
+  return transform.translation;
+}
+
+static void reset_selected_transform() {
+  glm::vec3 &values = selected_transform_values();
+  values = g_transform_operation == TRANSFORM_SCALE
+               ? glm::vec3(1.0f)
+               : glm::vec3(0.0f);
+}
+
+
 static void draw_mesh_controls(mu_Context *ctx, int *widths) {
   mu_Color mesh_color = MESH_COLOR;
   colored_label_row(ctx, widths, "Mesh:", mesh_color);
@@ -482,6 +579,69 @@ static void draw_mesh_controls(mu_Context *ctx, int *widths) {
   label_row(ctx, widths, translation_text);
 }
 
+static void draw_transform_controls(mu_Context *ctx, int *widths) {
+  colored_label_row(ctx, widths, "Transform controls:", TRANSFORM_COLOR);
+
+  int space_widths[] = {210, 210};
+  mu_layout_row(ctx, 2, space_widths, 0);
+  if (mu_button(ctx, g_transform_space == TRANSFORM_LOCAL ? "> Local" : "Local")) {
+    g_transform_space = TRANSFORM_LOCAL;
+  }
+  if (mu_button(ctx, g_transform_space == TRANSFORM_WORLD ? "> World" : "World")) {
+    g_transform_space = TRANSFORM_WORLD;
+  }
+
+  int operation_widths[] = {134, 134, 134};
+  mu_layout_row(ctx, 3, operation_widths, 0);
+  if (mu_button(ctx, g_transform_operation == TRANSFORM_TRANSLATION
+                         ? "> Translation" : "Translation")) {
+    g_transform_operation = TRANSFORM_TRANSLATION;
+  }
+  if (mu_button(ctx, g_transform_operation == TRANSFORM_ROTATION
+                         ? "> Rotation" : "Rotation")) {
+    g_transform_operation = TRANSFORM_ROTATION;
+  }
+  if (mu_button(ctx, g_transform_operation == TRANSFORM_SCALE
+                         ? "> Scale" : "Scale")) {
+    g_transform_operation = TRANSFORM_SCALE;
+  }
+
+  const char *space_name =
+      g_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
+  const char *operation_name = "Translation";
+  float low = TRANSLATION_MIN;
+  float high = TRANSLATION_MAX;
+
+  if (g_transform_operation == TRANSFORM_ROTATION) {
+    operation_name = "Rotation";
+    low = ROTATION_MIN;
+    high = ROTATION_MAX;
+  } else if (g_transform_operation == TRANSFORM_SCALE) {
+    operation_name = "Scale";
+    low = SCALE_MIN;
+    high = SCALE_MAX;
+  }
+
+  char editing_text[96];
+  snprintf(editing_text, sizeof(editing_text),
+           "Editing: %s %s", space_name, operation_name);
+  label_row(ctx, widths, editing_text);
+
+  glm::vec3 &values = selected_transform_values();
+  float default_value =
+      g_transform_operation == TRANSFORM_SCALE ? 1.0f : 0.0f;
+
+  axis_slider_row(ctx, "X:", &values.x, low, high, default_value);
+  axis_slider_row(ctx, "Y:", &values.y, low, high, default_value);
+  axis_slider_row(ctx, "Z:", &values.z, low, high, default_value);
+
+  uniform_scale_row(ctx);
+
+  if (button_row(ctx, widths, "Reset All")) {
+    reset_all_transforms();
+  }
+}
+
 static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
   if (mu_begin_window(ctx, WIDGETS_WINDOW_TITLE, DEFAULT_WIDGETS_RECT)) {
     int widths[] = {-1};
@@ -496,6 +656,9 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
     spacer_row(ctx, widths, 8);
     draw_mesh_controls(ctx, widths);
 
+    spacer_row(ctx, widths, 8);
+    draw_transform_controls(ctx, widths);
+
     if (button_row(ctx, widths, "Quit")) {
       *quit_requested = true;
     }
@@ -503,6 +666,7 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
     mu_end_window(ctx);
   }
 }
+
 
 static void draw_creative_canvas_window(mu_Context *ctx) {
   if (mu_begin_window(ctx, CANVAS_WINDOW_TITLE, DEFAULT_CANVAS_RECT)) {
@@ -542,7 +706,7 @@ static void draw_window_controls_window(mu_Context *ctx,
 
     colored_label_row(ctx, widths, "Window controls:", WINDOW_CONTROLS_COLOR);
 
-    if (button_row(ctx, widths, "Show / Reset Widgets")) {
+    if (button_row(ctx, widths, "Show / Reset Scene Controls")) {
       *reset_widgets_requested = true;
     }
 
@@ -563,6 +727,7 @@ static void handle_ui_reset_requests(mu_Context *ctx,
     *reset_widgets_requested = false;
   }
 
+
   if (*reset_canvas_requested) {
     reset_ui_window(ctx, CANVAS_WINDOW_TITLE, DEFAULT_CANVAS_RECT);
     *reset_canvas_requested = false;
@@ -573,6 +738,7 @@ static void cache_all_ui_window_states(mu_Context *ctx) {
   // Cached rectangles let drawing input ignore clicks that begin on top of UI.
   cache_ui_window_state(ctx, WIDGETS_WINDOW_TITLE,
                         &g_widgets_window_rect, &g_widgets_window_open, false);
+
   cache_ui_window_state(ctx, CANVAS_WINDOW_TITLE,
                         &g_canvas_window_rect, &g_canvas_window_open, false);
   cache_ui_window_state(ctx, WINDOW_CONTROLS_TITLE,
@@ -838,6 +1004,7 @@ static bool load_mesh_option(int option_index) {
       g_selected_mesh_index = option_index;
       snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "%s", path);
       g_viewport_transform = calculate_viewport_transform(g_loaded_mesh);
+      reset_all_transforms();
       return true;
     }
   }
@@ -914,10 +1081,12 @@ int main() {
     mu_begin(ctx);
 
     // Build all UI windows before rendering them into the framebuffer.
-    handle_ui_reset_requests(ctx, &reset_widgets_requested, &reset_canvas_requested);
+    handle_ui_reset_requests(ctx, &reset_widgets_requested,
+                             &reset_canvas_requested);
     draw_widgets_window(ctx, &quit_requested);
     draw_creative_canvas_window(ctx);
-    draw_window_controls_window(ctx, &reset_widgets_requested, &reset_canvas_requested);
+    draw_window_controls_window(ctx, &reset_widgets_requested,
+                                &reset_canvas_requested);
     cache_all_ui_window_states(ctx);
 
     mu_end(ctx);
