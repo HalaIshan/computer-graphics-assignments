@@ -370,22 +370,22 @@ static void slider_row(mu_Context *ctx, int *widths, const char *label,
 
 static void axis_slider_row(mu_Context *ctx, const char *axis,
                             float *value, float low, float high,
-                            float default_value) {
-  int widths[] = {24, 320, 80};
+                            float default_value, const char *reset_label) {
+  int widths[] = {24, 300, 100};
   mu_layout_row(ctx, 3, widths, 0);
   mu_label(ctx, axis);
   mu_slider(ctx, value, low, high);
-  if (mu_button(ctx, "Reset")) {
+  if (mu_button(ctx, reset_label)) {
     *value = default_value;
   }
 }
 
 static void uniform_scale_row(mu_Context *ctx) {
-  int widths[] = {112, 232, 80};
+  int widths[] = {112, 212, 100};
   mu_layout_row(ctx, 3, widths, 0);
   mu_label(ctx, "Uniform scale:");
   mu_slider(ctx, &g_model_size, SCALE_MIN, SCALE_MAX);
-  if (mu_button(ctx, "Reset")) {
+  if (mu_button(ctx, "Reset Size")) {
     g_model_size = 1.0f;
   }
 }
@@ -468,6 +468,54 @@ static ScreenPoint project_vertex_orthographic(const glm::vec3 &vertex,
       (int)std::lround((HEIGHT - 1) - mapped.y)}; // Flip y only for screen drawing
 }
 
+static glm::mat4 build_rotation_matrix(const glm::vec3 &rotation_degrees) {
+  glm::mat4 rotation(1.0f);
+  rotation = glm::rotate(rotation, glm::radians(rotation_degrees.x),
+                         glm::vec3(1.0f, 0.0f, 0.0f));
+  rotation = glm::rotate(rotation, glm::radians(rotation_degrees.y),
+                         glm::vec3(0.0f, 1.0f, 0.0f));
+  rotation = glm::rotate(rotation, glm::radians(rotation_degrees.z),
+                         glm::vec3(0.0f, 0.0f, 1.0f));
+  return rotation;
+}
+
+static glm::mat4 build_trs_matrix(const TransformParameters &transform,
+                                  const glm::vec3 &scale_multiplier) {
+  glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.translation);
+  glm::mat4 rotation = build_rotation_matrix(transform.rotation_degrees);
+  glm::mat4 scale = glm::scale(glm::mat4(1.0f),
+                               transform.scale * scale_multiplier);
+
+  return translation * rotation * scale;
+}
+
+static glm::mat4 build_local_transform_matrix(const TransformParameters &transform,
+                                              const glm::vec3 &mesh_center) {
+  glm::mat4 move_to_center = glm::translate(glm::mat4(1.0f), mesh_center);
+  glm::mat4 move_from_center = glm::translate(glm::mat4(1.0f), -mesh_center);
+  glm::mat4 local_trs = build_trs_matrix(transform, glm::vec3(g_model_size));
+
+  return move_to_center * local_trs * move_from_center;
+}
+
+static glm::mat4 build_world_transform_matrix(const TransformParameters &transform) {
+  return build_trs_matrix(transform, glm::vec3(1.0f));
+}
+
+static glm::mat4 build_model_matrix() {
+  glm::mat4 local_matrix =
+      build_local_transform_matrix(g_local_transform, g_viewport_transform.center);
+  glm::mat4 world_matrix = build_world_transform_matrix(g_world_transform);
+
+  return world_matrix * local_matrix;
+}
+
+static glm::vec3 apply_model_transform(const glm::vec3 &vertex,
+                                       const glm::mat4 &model_matrix) {
+  glm::vec4 transformed = model_matrix * glm::vec4(vertex, 1.0f);
+  return glm::vec3(transformed);
+}
+
 static void reset_transform(TransformParameters &transform) {
   transform.translation = glm::vec3(0.0f);
   transform.rotation_degrees = glm::vec3(0.0f);
@@ -499,14 +547,6 @@ static glm::vec3 &selected_transform_values() {
 
   return transform.translation;
 }
-
-static void reset_selected_transform() {
-  glm::vec3 &values = selected_transform_values();
-  values = g_transform_operation == TRANSFORM_SCALE
-               ? glm::vec3(1.0f)
-               : glm::vec3(0.0f);
-}
-
 
 static void draw_mesh_controls(mu_Context *ctx, int *widths) {
   mu_Color mesh_color = MESH_COLOR;
@@ -631,9 +671,9 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   float default_value =
       g_transform_operation == TRANSFORM_SCALE ? 1.0f : 0.0f;
 
-  axis_slider_row(ctx, "X:", &values.x, low, high, default_value);
-  axis_slider_row(ctx, "Y:", &values.y, low, high, default_value);
-  axis_slider_row(ctx, "Z:", &values.z, low, high, default_value);
+  axis_slider_row(ctx, "X:", &values.x, low, high, default_value, "Reset X");
+  axis_slider_row(ctx, "Y:", &values.y, low, high, default_value, "Reset Y");
+  axis_slider_row(ctx, "Z:", &values.z, low, high, default_value, "Reset Z");
 
   uniform_scale_row(ctx);
 
@@ -866,11 +906,15 @@ static void draw_mesh_wireframe() {
   }
 
   uint32_t wireframe_color = get_wireframe_color();
+  glm::mat4 model_matrix = build_model_matrix();
 
   for (const Face &face : g_loaded_mesh.faces) {
-    const glm::vec3 &v0 = g_loaded_mesh.vertices[face.v0];
-    const glm::vec3 &v1 = g_loaded_mesh.vertices[face.v1];
-    const glm::vec3 &v2 = g_loaded_mesh.vertices[face.v2];
+    glm::vec3 v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
+                                         model_matrix);
+    glm::vec3 v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
+                                         model_matrix);
+    glm::vec3 v2 = apply_model_transform(g_loaded_mesh.vertices[face.v2],
+                                         model_matrix);
 
     ScreenPoint p0 = project_vertex_orthographic(v0, g_viewport_transform);
     ScreenPoint p1 = project_vertex_orthographic(v1, g_viewport_transform);

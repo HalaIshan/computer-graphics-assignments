@@ -134,7 +134,7 @@ I also added a model selector, making the panel clearer and leaving space for up
 
 The models are stored in `nanorender/assets/hw2/models/` and defined in the `MESH_OPTIONS` list. The following demo shows the selector changing the model and immediately updating its information and wireframe:
 
-<img src="../assets/hw2/images/part3_model_selector_demo.gif" alt="Switching between the Part 3 OBJ models" width="400">
+<img src="../assets/hw2/gifs/part3_model_selector_demo.gif" alt="Switching between the Part 3 OBJ models" width="400">
 
 ---
 
@@ -154,3 +154,42 @@ The slider ranges are:
 At this stage, the GUI stores the transformation values. The actual Model Matrix calculation and applying the transformations to the mesh are completed in Part 5.
 
 <img src="../assets/hw2/images/part4_transform_controls.png" alt="Part 4 transformation controls" width="450">
+
+---
+
+## Part 5: Applying Transformations
+
+For Part 5, I used the Part 4 slider values to build Local and World transformation matrices. During drawing, each original vertex is copied, transformed by the final Model Matrix, then sent through the viewport transform and orthographic projection. The loaded OBJ vertices are not changed.
+
+The matrices are combined as:
+
+`Model Matrix = World Matrix * Local Matrix`
+
+With GLM column-vector multiplication, the rightmost matrix is applied first, so this order applies the Local transform first and the World transform second:
+
+`vertex -> local transform -> world transform -> projection`
+
+For the comparison, I used `Translation X` and `Rotation Z` because they make the Local/World difference clear on the 2D screen.
+
+<table>
+  <tr>
+    <th>Case 1: Local Translation, Then World Rotation</th>
+    <th>Case 2: World Translation, Then Local Rotation</th>
+  </tr>
+  <tr>
+    <td>
+      1. Translate on X in the Local frame.<br>
+      2. Rotate around Z in the World frame.<br><br>
+      The model is moved first, then the world rotation makes it move around the world origin.<br><br>
+      <img src="../assets/hw2/gifs/part5_local_translate_x_then_world_rotate_z.gif" alt="Local translation followed by world rotation" width="360">
+    </td>
+    <td>
+      1. Translate on X in the World frame.<br>
+      2. Rotate around Z in the Local frame.<br><br>
+      The model is moved in the world first, then the local rotation makes it spin around its own center.<br><br>
+      <img src="../assets/hw2/gifs/part5_world_translate_x_then_local_rotate_z.gif" alt="World translation followed by local rotation" width="360">
+    </td>
+  </tr>
+</table>
+
+The two demos show that the same translation and rotation values can produce different motion depending on whether they are applied in the Local frame or the World frame.
