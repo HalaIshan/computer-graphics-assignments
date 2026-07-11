@@ -90,6 +90,7 @@ enum TransformOperation {
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
+static const char *MESH_DETAILS_WINDOW_TITLE = "Mesh Details";       // Optional mesh debug info
 
 static const MeshOption MESH_OPTIONS[] = {
     {"simple_pyramid.obj",
@@ -114,10 +115,13 @@ static const float ROTATION_MIN = -180.0f;
 static const float ROTATION_MAX = 180.0f;
 static const float SCALE_MIN = 0.1f;
 static const float SCALE_MAX = 2.0f;
+static const float KEYBOARD_TRANSLATION_STEP = 0.03f; // Direct input movement speed
+static const float KEYBOARD_ROTATION_STEP = 2.0f;     // Direct input rotation speed
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
 static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 160};   // Upper right
 static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 200, 360, 450};           // Below window controls
+static const mu_Rect DEFAULT_MESH_DETAILS_RECT = {500, 20, 420, 230};       // Hidden until requested
 
 static const mu_Color KEYBOARD_COLOR = {100, 200, 255, 255};         // Light blue
 static const mu_Color BACKGROUND_COLOR = {180, 255, 180, 255};       // Light green
@@ -154,6 +158,7 @@ static TransformParameters g_world_transform = {
 static TransformSpace g_transform_space = TRANSFORM_LOCAL;
 static TransformOperation g_transform_operation = TRANSFORM_TRANSLATION;
 static float g_model_size = 1.0f; // Uniform size multiplier for the whole model
+static TransformSpace g_keyboard_transform_space = TRANSFORM_WORLD; // Part 6 keyboard mode
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -163,6 +168,7 @@ static int g_line_start_y = 0;
 static int g_line_current_x = 0;
 static int g_line_current_y = 0;
 static bool g_previous_left_down = false;
+static bool g_previous_s_down = false;
 
 // Current line drawing color controlled by UI
 static float g_line_color_r = 255.0f; // Slider value, 0-255
@@ -179,10 +185,14 @@ static mu_Color ui_current_line_color() {
 static mu_Rect g_widgets_window_rect = DEFAULT_WIDGETS_RECT;
 static mu_Rect g_canvas_window_rect = DEFAULT_CANVAS_RECT;
 static mu_Rect g_window_controls_rect = DEFAULT_WINDOW_CONTROLS_RECT;
+static mu_Rect g_mesh_details_window_rect = DEFAULT_MESH_DETAILS_RECT;
 
 static bool g_widgets_window_open = true;
 static bool g_canvas_window_open = true;
 static bool g_window_controls_open = true;
+static bool g_mesh_details_window_open = false;
+static bool g_show_mesh_details_window = false;
+static bool g_reset_mesh_details_window = false;
 
 // General helpers
 static uint32_t get_current_line_color() {
@@ -259,6 +269,11 @@ static bool is_mouse_over_ui_window(int x, int y) {
 
   if (g_window_controls_open &&
       point_inside_rect(x, y, g_window_controls_rect)) {
+    return true;
+  }
+
+  if (g_show_mesh_details_window && g_mesh_details_window_open &&
+      point_inside_rect(x, y, g_mesh_details_window_rect)) {
     return true;
   }
 
@@ -528,10 +543,76 @@ static void reset_all_transforms() {
   g_model_size = 1.0f;
 }
 
+static TransformParameters &transform_for_space(TransformSpace space) {
+  return space == TRANSFORM_LOCAL ? g_local_transform : g_world_transform;
+}
+
+static TransformParameters &keyboard_transform() {
+  return transform_for_space(g_keyboard_transform_space);
+}
+
+static void toggle_keyboard_transform_space() {
+  g_keyboard_transform_space = g_keyboard_transform_space == TRANSFORM_LOCAL
+                                   ? TRANSFORM_WORLD
+                                   : TRANSFORM_LOCAL;
+}
+
+static void sync_transform_controls_to_keyboard(TransformOperation operation) {
+  g_transform_space = g_keyboard_transform_space;
+  g_transform_operation = operation;
+}
+
+static void update_keyboard_transform_input(struct mfb_window *window) {
+  const uint8_t *keys = mfb_get_key_buffer(window);
+  if (!keys) {
+    return;
+  }
+
+  bool s_down = keys[MFB_KB_KEY_S] != 0;
+  if (s_down && !g_previous_s_down) {
+    toggle_keyboard_transform_space();
+    g_transform_space = g_keyboard_transform_space;
+  }
+  g_previous_s_down = s_down;
+
+  TransformParameters &transform = keyboard_transform();
+  bool translation_changed = false;
+  bool rotation_changed = false;
+
+  if (keys[MFB_KB_KEY_LEFT]) {
+    transform.translation.x -= KEYBOARD_TRANSLATION_STEP;
+    translation_changed = true;
+  }
+  if (keys[MFB_KB_KEY_RIGHT]) {
+    transform.translation.x += KEYBOARD_TRANSLATION_STEP;
+    translation_changed = true;
+  }
+  if (keys[MFB_KB_KEY_UP]) {
+    transform.translation.y += KEYBOARD_TRANSLATION_STEP;
+    translation_changed = true;
+  }
+  if (keys[MFB_KB_KEY_DOWN]) {
+    transform.translation.y -= KEYBOARD_TRANSLATION_STEP;
+    translation_changed = true;
+  }
+  if (keys[MFB_KB_KEY_Q]) {
+    transform.rotation_degrees.z -= KEYBOARD_ROTATION_STEP;
+    rotation_changed = true;
+  }
+  if (keys[MFB_KB_KEY_E]) {
+    transform.rotation_degrees.z += KEYBOARD_ROTATION_STEP;
+    rotation_changed = true;
+  }
+
+  if (translation_changed) {
+    sync_transform_controls_to_keyboard(TRANSFORM_TRANSLATION);
+  } else if (rotation_changed) {
+    sync_transform_controls_to_keyboard(TRANSFORM_ROTATION);
+  }
+}
+
 static TransformParameters &selected_transform() {
-  return g_transform_space == TRANSFORM_LOCAL
-             ? g_local_transform
-             : g_world_transform;
+  return transform_for_space(g_transform_space);
 }
 
 static glm::vec3 &selected_transform_values() {
@@ -575,48 +656,75 @@ static void draw_mesh_controls(mu_Context *ctx, int *widths) {
     }
   }
 
-  char mesh_summary_text[128];
-  snprintf(mesh_summary_text, sizeof(mesh_summary_text),
-           "Loaded: %s | V: %zu | F: %zu",
-           g_mesh_loaded ? "yes" : "no",
-           g_loaded_mesh.vertices.size(),
-           g_loaded_mesh.faces.size());
-  label_row(ctx, widths, mesh_summary_text);
+  label_row(ctx, widths, "Use Show Mesh Details for loading and viewport values.");
+}
 
-  if (!g_viewport_transform.valid) {
-    label_row(ctx, widths, "Viewport: not available");
+static void draw_mesh_details_window(mu_Context *ctx) {
+  if (!g_show_mesh_details_window) {
     return;
   }
 
-  const BoundingBox &box = g_viewport_transform.box;
+  if (g_reset_mesh_details_window) {
+    reset_ui_window(ctx, MESH_DETAILS_WINDOW_TITLE, DEFAULT_MESH_DETAILS_RECT);
+    g_reset_mesh_details_window = false;
+  }
 
-  char bounds_text[160];
-  snprintf(bounds_text, sizeof(bounds_text),
-           "Bounds: %.1f %.1f %.1f -> %.1f %.1f %.1f",
-           box.min.x, box.min.y, box.min.z,
-           box.max.x, box.max.y, box.max.z);
-  label_row(ctx, widths, bounds_text);
+  if (mu_begin_window_ex(ctx, MESH_DETAILS_WINDOW_TITLE,
+                         DEFAULT_MESH_DETAILS_RECT, 0)) {
+    int widths[] = {-1};
+    g_mesh_details_window_open = true;
 
-  char center_text[128];
-  snprintf(center_text, sizeof(center_text),
-           "Center: %.1f, %.1f, %.1f",
-           g_viewport_transform.center.x,
-           g_viewport_transform.center.y,
-           g_viewport_transform.center.z);
-  label_row(ctx, widths, center_text);
+    colored_label_row(ctx, widths, "Mesh details:", MESH_COLOR);
 
-  char scale_text[128];
-  snprintf(scale_text, sizeof(scale_text),
-           "Scale: %.1f", g_viewport_transform.scale);
-  label_row(ctx, widths, scale_text);
+    char mesh_summary_text[128];
+    snprintf(mesh_summary_text, sizeof(mesh_summary_text),
+             "Loaded: %s | V: %zu | F: %zu",
+             g_mesh_loaded ? "yes" : "no",
+             g_loaded_mesh.vertices.size(),
+             g_loaded_mesh.faces.size());
+    label_row(ctx, widths, mesh_summary_text);
 
-  char translation_text[128];
-  snprintf(translation_text, sizeof(translation_text),
-           "Translate: %.1f, %.1f, %.1f",
-           g_viewport_transform.translation.x,
-           g_viewport_transform.translation.y,
-           g_viewport_transform.translation.z);
-  label_row(ctx, widths, translation_text);
+    if (!g_viewport_transform.valid) {
+      label_row(ctx, widths, "Viewport: not available");
+      mu_end_window(ctx);
+      return;
+    }
+
+    const BoundingBox &box = g_viewport_transform.box;
+
+    char bounds_text[160];
+    snprintf(bounds_text, sizeof(bounds_text),
+             "Bounds: %.1f %.1f %.1f -> %.1f %.1f %.1f",
+             box.min.x, box.min.y, box.min.z,
+             box.max.x, box.max.y, box.max.z);
+    label_row(ctx, widths, bounds_text);
+
+    char center_text[128];
+    snprintf(center_text, sizeof(center_text),
+             "Center: %.1f, %.1f, %.1f",
+             g_viewport_transform.center.x,
+             g_viewport_transform.center.y,
+             g_viewport_transform.center.z);
+    label_row(ctx, widths, center_text);
+
+    char scale_text[128];
+    snprintf(scale_text, sizeof(scale_text),
+             "Scale: %.1f", g_viewport_transform.scale);
+    label_row(ctx, widths, scale_text);
+
+    char translation_text[128];
+    snprintf(translation_text, sizeof(translation_text),
+             "Translate: %.1f, %.1f, %.1f",
+             g_viewport_transform.translation.x,
+             g_viewport_transform.translation.y,
+             g_viewport_transform.translation.z);
+    label_row(ctx, widths, translation_text);
+
+    mu_end_window(ctx);
+  } else {
+    g_mesh_details_window_open = false;
+    g_show_mesh_details_window = false;
+  }
 }
 
 static void draw_transform_controls(mu_Context *ctx, int *widths) {
@@ -680,6 +788,18 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   if (button_row(ctx, widths, "Reset All")) {
     reset_all_transforms();
   }
+
+  const char *keyboard_mode =
+      g_keyboard_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
+  char keyboard_mode_text[64];
+  snprintf(keyboard_mode_text, sizeof(keyboard_mode_text),
+           "Mode: %s", keyboard_mode);
+
+  colored_label_row(ctx, widths, "Keyboard input:", TRANSFORM_COLOR);
+  label_row(ctx, widths, "S: toggle Local/World");
+  label_row(ctx, widths, "Arrows: translate X/Y");
+  label_row(ctx, widths, "Q/E: rotate Z");
+  label_row(ctx, widths, keyboard_mode_text);
 }
 
 static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
@@ -737,7 +857,8 @@ static void draw_creative_canvas_window(mu_Context *ctx) {
 
 static void draw_window_controls_window(mu_Context *ctx,
                                         bool *reset_widgets_requested,
-                                        bool *reset_canvas_requested) {
+                                        bool *reset_canvas_requested,
+                                        bool *show_mesh_details_requested) {
   int window_controls_options = MU_OPT_NOCLOSE | MU_OPT_NORESIZE;
 
   if (mu_begin_window_ex(ctx, WINDOW_CONTROLS_TITLE,
@@ -754,13 +875,18 @@ static void draw_window_controls_window(mu_Context *ctx,
       *reset_canvas_requested = true;
     }
 
+    if (button_row(ctx, widths, "Show Mesh Details")) {
+      *show_mesh_details_requested = true;
+    }
+
     mu_end_window(ctx);
   }
 }
 
 static void handle_ui_reset_requests(mu_Context *ctx,
                                      bool *reset_widgets_requested,
-                                     bool *reset_canvas_requested) {
+                                     bool *reset_canvas_requested,
+                                     bool *show_mesh_details_requested) {
   // Reset requests are set by buttons, then applied at the start of the next UI frame.
   if (*reset_widgets_requested) {
     reset_ui_window(ctx, WIDGETS_WINDOW_TITLE, DEFAULT_WIDGETS_RECT);
@@ -771,6 +897,13 @@ static void handle_ui_reset_requests(mu_Context *ctx,
   if (*reset_canvas_requested) {
     reset_ui_window(ctx, CANVAS_WINDOW_TITLE, DEFAULT_CANVAS_RECT);
     *reset_canvas_requested = false;
+  }
+
+  if (*show_mesh_details_requested) {
+    g_show_mesh_details_window = true;
+    g_mesh_details_window_open = true;
+    g_reset_mesh_details_window = true;
+    *show_mesh_details_requested = false;
   }
 }
 
@@ -783,6 +916,11 @@ static void cache_all_ui_window_states(mu_Context *ctx) {
                         &g_canvas_window_rect, &g_canvas_window_open, false);
   cache_ui_window_state(ctx, WINDOW_CONTROLS_TITLE,
                         &g_window_controls_rect, &g_window_controls_open, true);
+
+  if (g_show_mesh_details_window) {
+    cache_ui_window_state(ctx, MESH_DETAILS_WINDOW_TITLE,
+                          &g_mesh_details_window_rect, &g_mesh_details_window_open, false);
+  }
 }
 
 // Drawing helpers
@@ -1102,6 +1240,11 @@ int main() {
           return; // consume the shortcut key
         }
 
+        if (c == 's' || c == 'S' || c == 'q' || c == 'Q' ||
+            c == 'e' || c == 'E') {
+          return; // consume transform shortcut keys
+        }
+
         ui_bridge_char_input(w, c);
       },
       window);
@@ -1113,6 +1256,7 @@ int main() {
     g_frame_counter++;
 
     update_line_drawing(ctx);
+    update_keyboard_transform_input(window);
 
     // 2. Scene Rendering
     render_background();
@@ -1121,16 +1265,20 @@ int main() {
     static bool quit_requested = false;
     static bool reset_widgets_requested = false;
     static bool reset_canvas_requested = false;
+    static bool show_mesh_details_requested = false;
 
     mu_begin(ctx);
 
     // Build all UI windows before rendering them into the framebuffer.
     handle_ui_reset_requests(ctx, &reset_widgets_requested,
-                             &reset_canvas_requested);
+                             &reset_canvas_requested,
+                             &show_mesh_details_requested);
     draw_widgets_window(ctx, &quit_requested);
     draw_creative_canvas_window(ctx);
+    draw_mesh_details_window(ctx);
     draw_window_controls_window(ctx, &reset_widgets_requested,
-                                &reset_canvas_requested);
+                                &reset_canvas_requested,
+                                &show_mesh_details_requested);
     cache_all_ui_window_states(ctx);
 
     mu_end(ctx);
