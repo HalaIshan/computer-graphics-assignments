@@ -217,3 +217,13 @@ When a shortcut is used, the GUI switches to the matching Local/World space and 
 I moved the detailed mesh and viewport values into a separate `Mesh Details` window opened from `Window Controls`. The information could still fit in the main panel, but it made the panel longer and required scrolling while using the transformation controls. Keeping it in an optional window made the main panel easier to use. The window is hidden by default, can be opened or closed when needed, and updates when the selected model changes.
 
 <img src="../assets/hw2/gifs/part6_mesh_details_demo.gif" alt="Part 6 mesh details window demo" width="800">
+
+---
+
+## Reflection
+
+This assignment helped me understand the basic flow of a 3D rendering pipeline, from loading mesh data to normalizing, transforming, projecting, and drawing it on the screen. The most important thing I learned was how much transformation order matters. In Part 5, I saw that using the same translation and rotation values can create different motion depending on whether they are applied in the Local frame or the World frame, which made matrix multiplication order much clearer to me.
+
+I enjoyed working on this assignment because it was clear, practical, and lightweight. Seeing the model respond to both GUI sliders and keyboard input made the graphics concepts feel more interactive and easier to understand.
+
+Since I completed the assignment individually, the pair-programming extensions in Part 7 were not required.
