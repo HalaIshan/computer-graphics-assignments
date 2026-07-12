@@ -51,18 +51,57 @@ After enabling both debug helpers, I tested them while transforming the pyramid.
 </table>
 
 ---
-## part 2: The Virtual Camera (View Matrix)
-
+## Part 2: The Virtual Camera (View Matrix)
 
 ### UI Preparation for Camera Work
 
 Before starting the View Matrix implementation, I prepared the interface for camera testing:
 
-- I reduced the default screen fitting size for loaded models to about half of the previous size. Before recording examples, I often had to manually lower the uniform scale so there was enough room to see movement clearly. This change makes the model appear smaller by default and leaves more visible space for the upcoming View Matrix tests, without changing the OBJ vertex data.
+- I reduced the default screen fitting size for loaded models to about half of the previous size. In earlier tests, I often had to manually lower the uniform scale before recording examples so there was enough room to see the model movement clearly. With this change, the model appears smaller by default, leaving more visible space for the upcoming View Matrix tests, while the original OBJ vertex data stays unchanged.
 - I kept the `Creative Canvas` hidden by default because it is not needed for the camera parts, but it can still be opened from `Window Controls`.
-- I added a separate `Camera Controls` panel on the right side of the window, where the camera position and rotation sliders will be added next.
+- I added a separate `Camera Controls` panel on the right side of the window for the camera position and rotation sliders.
+- I changed the default model to `simple_pyramid.obj` for this part because its shape makes the camera movement and rotation easier to see while testing.
+
+### View Matrix Implementation
+
+For Part 2, I added a `Camera Controls` panel with X, Y, and Z sliders for camera position and rotation, plus reset buttons for each axis and for the full camera.
+
+<img src="../assets/hw3/images/hw3_part2_camera_controls_gui.png" alt="Camera Controls panel" width="300">
+
+I build the camera matrix from translation and rotation, then use its inverse as the View Matrix:
+
+`Camera Matrix = Translation * Rotation`<br>
+`View Matrix = inverse(Camera Matrix)`
+
+During rendering, the original OBJ vertices stay unchanged and are transformed temporarily each frame:
+
+`vertex -> Model Matrix -> View Matrix -> viewport transform -> orthographic projection`
+
+Because the View Matrix is the inverse camera transform, moving or rotating the camera makes the scene appear to move or rotate in the opposite direction.
+
+### Camera Movement Tests
+
+To isolate the camera effect, I started both tests from the normal model position: one test changes camera position, and the other changes camera rotation.
+
+<table>
+  <tr>
+    <th>Camera Position X/Y</th>
+    <th>Camera Rotation X/Y</th>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw3/gifs/hw3_part2_camera_position_xy.gif" alt="Camera position X and Y movement" width="500"></td>
+    <td><img src="../assets/hw3/gifs/hw3_part2_camera_rotation_xy.gif" alt="Camera rotation X and Y movement" width="500"></td>
+  </tr>
+  <tr>
+    <td>
+      I moved the camera left on X, so the object appeared to move right. Then I moved the camera up on Y, so the object appeared to move down. This confirms the inverse movement caused by the View Matrix.
+    </td>
+    <td>
+      I rotated the camera with a negative X rotation and a positive Y rotation. The mesh, axes, and bounding box changed view together because they all pass through the same View Matrix before projection.
+    </td>
+  </tr>
+</table>
 
 ---
-
 
 

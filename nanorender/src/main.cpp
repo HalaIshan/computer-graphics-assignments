@@ -64,6 +64,11 @@ struct TransformParameters {
   glm::vec3 scale;
 };
 
+struct CameraParameters {
+  glm::vec3 position;
+  glm::vec3 rotation_degrees;
+};
+
 struct ScreenPoint {
   int x;
   int y;
@@ -104,7 +109,7 @@ static const MeshOption MESH_OPTIONS[] = {
 
 static const int MODEL_SEARCH_PATH_COUNT = sizeof(MODEL_SEARCH_PATHS) / sizeof(MODEL_SEARCH_PATHS[0]);
 static const int MESH_OPTION_COUNT = sizeof(MESH_OPTIONS) / sizeof(MESH_OPTIONS[0]);
-static const int DEFAULT_MESH_INDEX = 1; // Start with the regular cube comparison mesh
+static const int DEFAULT_MESH_INDEX = 0; // Start with the pyramid for camera tests
 
 static const float TRANSLATION_MIN = -2.0f;
 static const float TRANSLATION_MAX = 2.0f;
@@ -116,11 +121,15 @@ static const float KEYBOARD_TRANSLATION_STEP = 0.03f; // Direct input movement s
 static const float KEYBOARD_ROTATION_STEP = 2.0f;     // Direct input rotation speed
 static const float DEBUG_AXIS_LENGTH_RATIO = 0.65f;   // Axis length relative to mesh size
 static const float VIEWPORT_TARGET_SIZE = 300.0f;      // Half-size default fit for camera tests
+static const float CAMERA_POSITION_MIN = -4.0f;        // Camera movement range
+static const float CAMERA_POSITION_MAX = 4.0f;
+static const float CAMERA_ROTATION_MIN = -180.0f;      // Camera rotation range
+static const float CAMERA_ROTATION_MAX = 180.0f;
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
 static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 220};   // Upper right
-static const mu_Rect DEFAULT_CAMERA_CONTROLS_RECT = {1220, 270, 360, 220};  // Camera setup panel
-static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 520, 360, 360};           // Hidden drawing tools panel
+static const mu_Rect DEFAULT_CAMERA_CONTROLS_RECT = {1220, 270, 360, 600};  // Camera setup panel
+static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 650, 360, 240};           // Hidden drawing tools panel
 static const mu_Rect DEFAULT_MESH_DETAILS_RECT = {500, 20, 420, 230};       // Hidden until requested
 
 static const mu_Color KEYBOARD_COLOR = {100, 200, 255, 255};         // Light blue
@@ -166,6 +175,10 @@ static TransformSpace g_transform_space = TRANSFORM_LOCAL;
 static TransformOperation g_transform_operation = TRANSFORM_TRANSLATION;
 static float g_model_size = 1.0f; // Uniform size multiplier for the whole model
 static TransformSpace g_keyboard_transform_space = TRANSFORM_WORLD; // Part 6 keyboard mode
+
+// Assignment 3 camera state
+static CameraParameters g_camera = {
+    glm::vec3(0.0f), glm::vec3(0.0f)};
 
 // Assignment 3 visual debugging state
 static int g_show_coordinate_axes = 1; // Draw world and local coordinate axes
@@ -414,6 +427,18 @@ static void axis_slider_row(mu_Context *ctx, const char *axis,
   }
 }
 
+static void compact_axis_slider_row(mu_Context *ctx, const char *axis,
+                                    float *value, float low, float high,
+                                    const char *reset_label) {
+  int widths[] = {24, 210, 92};
+  mu_layout_row(ctx, 3, widths, 0);
+  mu_label(ctx, axis);
+  mu_slider(ctx, value, low, high);
+  if (mu_button(ctx, reset_label)) {
+    *value = 0.0f;
+  }
+}
+
 static void uniform_scale_row(mu_Context *ctx) {
   int widths[] = {112, 212, 100};
   mu_layout_row(ctx, 3, widths, 0);
@@ -544,6 +569,20 @@ static glm::mat4 build_model_matrix() {
   return world_matrix * local_matrix;
 }
 
+static glm::mat4 build_camera_matrix() {
+  glm::mat4 translation = glm::translate(glm::mat4(1.0f), g_camera.position);
+  glm::mat4 rotation = build_rotation_matrix(g_camera.rotation_degrees);
+  return translation * rotation;
+}
+
+static glm::mat4 build_view_matrix() {
+  return glm::inverse(build_camera_matrix());
+}
+
+static glm::mat4 build_model_view_matrix(const glm::mat4 &model_matrix) {
+  return build_view_matrix() * model_matrix;
+}
+
 static glm::vec3 apply_model_transform(const glm::vec3 &vertex,
                                        const glm::mat4 &model_matrix) {
   glm::vec4 transformed = model_matrix * glm::vec4(vertex, 1.0f);
@@ -560,6 +599,11 @@ static void reset_all_transforms() {
   reset_transform(g_local_transform);
   reset_transform(g_world_transform);
   g_model_size = 1.0f;
+}
+
+static void reset_camera() {
+  g_camera.position = glm::vec3(0.0f);
+  g_camera.rotation_degrees = glm::vec3(0.0f);
 }
 
 static TransformParameters &transform_for_space(TransformSpace space) {
@@ -891,10 +935,29 @@ static void draw_camera_controls_window(mu_Context *ctx) {
     int widths[] = {-1};
 
     colored_label_row(ctx, widths, "Camera controls:", CAMERA_COLOR);
-    label_row(ctx, widths, "Part 2 setup panel.");
-    label_row(ctx, widths, "Camera position sliders");
-    label_row(ctx, widths, "and rotation sliders");
-    label_row(ctx, widths, "will be added here.");
+    label_row(ctx, widths, "View Matrix = inverse(Camera Matrix)");
+
+    spacer_row(ctx, widths, 6);
+    colored_label_row(ctx, widths, "Camera position:", CAMERA_COLOR);
+    compact_axis_slider_row(ctx, "X:", &g_camera.position.x,
+                            CAMERA_POSITION_MIN, CAMERA_POSITION_MAX, "Reset PX");
+    compact_axis_slider_row(ctx, "Y:", &g_camera.position.y,
+                            CAMERA_POSITION_MIN, CAMERA_POSITION_MAX, "Reset PY");
+    compact_axis_slider_row(ctx, "Z:", &g_camera.position.z,
+                            CAMERA_POSITION_MIN, CAMERA_POSITION_MAX, "Reset PZ");
+
+    spacer_row(ctx, widths, 6);
+    colored_label_row(ctx, widths, "Camera rotation:", CAMERA_COLOR);
+    compact_axis_slider_row(ctx, "X:", &g_camera.rotation_degrees.x,
+                            CAMERA_ROTATION_MIN, CAMERA_ROTATION_MAX, "Reset RX");
+    compact_axis_slider_row(ctx, "Y:", &g_camera.rotation_degrees.y,
+                            CAMERA_ROTATION_MIN, CAMERA_ROTATION_MAX, "Reset RY");
+    compact_axis_slider_row(ctx, "Z:", &g_camera.rotation_degrees.z,
+                            CAMERA_ROTATION_MIN, CAMERA_ROTATION_MAX, "Reset RZ");
+
+    if (button_row(ctx, widths, "Reset Camera")) {
+      reset_camera();
+    }
 
     mu_end_window(ctx);
   }
@@ -1118,7 +1181,7 @@ static void draw_mesh_wireframe() {
   }
 
   uint32_t wireframe_color = get_wireframe_color();
-  glm::mat4 model_matrix = build_model_matrix();
+  glm::mat4 model_matrix = build_model_view_matrix(build_model_matrix());
 
   for (const Face &face : g_loaded_mesh.faces) {
     const glm::vec3 &v0 = g_loaded_mesh.vertices[face.v0];
@@ -1140,7 +1203,7 @@ static float debug_axis_length() {
 static void draw_projected_3d_line(const glm::vec3 &start,
                                    const glm::vec3 &end,
                                    uint32_t color) {
-  draw_transformed_3d_line(start, end, glm::mat4(1.0f), color);
+  draw_transformed_3d_line(start, end, build_view_matrix(), color);
 }
 
 static void draw_axis_tripod(const glm::vec3 &origin,
@@ -1168,7 +1231,7 @@ static void draw_coordinate_axes() {
                    world_origin + glm::vec3(0.0f, axis_length, 0.0f),
                    world_origin + glm::vec3(0.0f, 0.0f, axis_length));
 
-  glm::mat4 model_matrix = build_model_matrix();
+  glm::mat4 model_matrix = build_model_view_matrix(build_model_matrix());
   glm::vec3 local_origin = g_viewport_transform.center;
   glm::vec3 local_x = local_origin + glm::vec3(axis_length, 0.0f, 0.0f);
   glm::vec3 local_y = local_origin + glm::vec3(0.0f, axis_length, 0.0f);
@@ -1178,6 +1241,7 @@ static void draw_coordinate_axes() {
   draw_transformed_3d_line(local_origin, local_y, model_matrix, AXIS_Y_COLOR);
   draw_transformed_3d_line(local_origin, local_z, model_matrix, AXIS_Z_COLOR);
 }
+
 static void draw_bounding_box() {
   if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_bounding_box) {
     return;
@@ -1199,7 +1263,7 @@ static void draw_bounding_box() {
       {4, 5}, {5, 7}, {7, 6}, {6, 4},
       {0, 4}, {1, 5}, {2, 6}, {3, 7}};
 
-  glm::mat4 model_matrix = build_model_matrix();
+  glm::mat4 model_matrix = build_model_view_matrix(build_model_matrix());
   for (const auto &edge : edges) {
     draw_transformed_3d_line(corners[edge[0]], corners[edge[1]],
                              model_matrix, BOUNDING_BOX_COLOR);
