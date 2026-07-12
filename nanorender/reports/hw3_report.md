@@ -50,4 +50,19 @@ After enabling both debug helpers, I tested them while transforming the pyramid.
   </tr>
 </table>
 
+---
+## part 2: The Virtual Camera (View Matrix)
+
+
+### UI Preparation for Camera Work
+
+Before starting the View Matrix implementation, I prepared the interface for camera testing:
+
+- I reduced the default screen fitting size for loaded models to about half of the previous size. Before recording examples, I often had to manually lower the uniform scale so there was enough room to see movement clearly. This change makes the model appear smaller by default and leaves more visible space for the upcoming View Matrix tests, without changing the OBJ vertex data.
+- I kept the `Creative Canvas` hidden by default because it is not needed for the camera parts, but it can still be opened from `Window Controls`.
+- I added a separate `Camera Controls` panel on the right side of the window, where the camera position and rotation sliders will be added next.
+
+---
+
+
 

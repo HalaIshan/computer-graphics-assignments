@@ -88,6 +88,7 @@ enum TransformOperation {
 
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
+static const char *CAMERA_CONTROLS_TITLE = "Camera Controls";         // Camera setup panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
 static const char *MESH_DETAILS_WINDOW_TITLE = "Mesh Details";       // Optional mesh debug info
 
@@ -114,10 +115,12 @@ static const float SCALE_MAX = 2.0f;
 static const float KEYBOARD_TRANSLATION_STEP = 0.03f; // Direct input movement speed
 static const float KEYBOARD_ROTATION_STEP = 2.0f;     // Direct input rotation speed
 static const float DEBUG_AXIS_LENGTH_RATIO = 0.65f;   // Axis length relative to mesh size
+static const float VIEWPORT_TARGET_SIZE = 300.0f;      // Half-size default fit for camera tests
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
-static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 160};   // Upper right
-static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 200, 360, 450};           // Below window controls
+static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 220};   // Upper right
+static const mu_Rect DEFAULT_CAMERA_CONTROLS_RECT = {1220, 270, 360, 220};  // Camera setup panel
+static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 520, 360, 360};           // Hidden drawing tools panel
 static const mu_Rect DEFAULT_MESH_DETAILS_RECT = {500, 20, 420, 230};       // Hidden until requested
 
 static const mu_Color KEYBOARD_COLOR = {100, 200, 255, 255};         // Light blue
@@ -125,6 +128,7 @@ static const mu_Color BACKGROUND_COLOR = {180, 255, 180, 255};       // Light gr
 static const mu_Color MESH_COLOR = {200, 180, 255, 255};             // Light purple
 static const mu_Color TRANSFORM_COLOR = {255, 220, 120, 255};        // Warm yellow
 static const mu_Color LINE_TOOLS_COLOR = {255, 180, 120, 255};       // Soft orange
+static const mu_Color CAMERA_COLOR = {170, 230, 255, 255};           // Light cyan
 static const mu_Color WINDOW_CONTROLS_COLOR = {220, 220, 255, 255};  // Pale blue
 static const mu_Color DEBUG_COLOR = {130, 230, 255, 255};            // Cyan debug controls
 
@@ -191,12 +195,15 @@ static mu_Color ui_current_line_color() {
 // then get updated every frame after MicroUI builds the UI.
 static mu_Rect g_widgets_window_rect = DEFAULT_WIDGETS_RECT;
 static mu_Rect g_canvas_window_rect = DEFAULT_CANVAS_RECT;
+static mu_Rect g_camera_controls_window_rect = DEFAULT_CAMERA_CONTROLS_RECT;
 static mu_Rect g_window_controls_rect = DEFAULT_WINDOW_CONTROLS_RECT;
 static mu_Rect g_mesh_details_window_rect = DEFAULT_MESH_DETAILS_RECT;
 
 static bool g_widgets_window_open = true;
-static bool g_canvas_window_open = true;
+static bool g_canvas_window_open = false;
+static bool g_camera_controls_window_open = true;
 static bool g_window_controls_open = true;
+static bool g_show_canvas_window = false;
 static bool g_mesh_details_window_open = false;
 static bool g_show_mesh_details_window = false;
 static bool g_reset_mesh_details_window = false;
@@ -269,8 +276,13 @@ static bool is_mouse_over_ui_window(int x, int y) {
   }
 
 
-  if (g_canvas_window_open &&
+  if (g_show_canvas_window && g_canvas_window_open &&
       point_inside_rect(x, y, g_canvas_window_rect)) {
+    return true;
+  }
+
+  if (g_camera_controls_window_open &&
+      point_inside_rect(x, y, g_camera_controls_window_rect)) {
     return true;
   }
 
@@ -468,7 +480,7 @@ static ViewportTransform calculate_viewport_transform(const Mesh &mesh) {
     return transform;
   }
 
-  float target_size = 600.0f; // Fits comfortably inside the 1600x900 framebuffer
+  float target_size = VIEWPORT_TARGET_SIZE; // Leaves room for camera movement tests
   transform.center = (transform.box.min + transform.box.max) * 0.5f;
   transform.scale = target_size / max_extent;
   transform.translation = glm::vec3(WIDTH / 2.0f, HEIGHT / 2.0f, 0.0f) -
@@ -841,6 +853,10 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
 
 
 static void draw_creative_canvas_window(mu_Context *ctx) {
+  if (!g_show_canvas_window) {
+    return;
+  }
+
   if (mu_begin_window(ctx, CANVAS_WINDOW_TITLE, DEFAULT_CANVAS_RECT)) {
     int widths[] = {-1};
     mu_Color line_tools_color = LINE_TOOLS_COLOR;
@@ -864,12 +880,30 @@ static void draw_creative_canvas_window(mu_Context *ctx) {
     }
 
     mu_end_window(ctx);
+  } else {
+    g_canvas_window_open = false;
+    g_show_canvas_window = false;
+  }
+}
+
+static void draw_camera_controls_window(mu_Context *ctx) {
+  if (mu_begin_window(ctx, CAMERA_CONTROLS_TITLE, DEFAULT_CAMERA_CONTROLS_RECT)) {
+    int widths[] = {-1};
+
+    colored_label_row(ctx, widths, "Camera controls:", CAMERA_COLOR);
+    label_row(ctx, widths, "Part 2 setup panel.");
+    label_row(ctx, widths, "Camera position sliders");
+    label_row(ctx, widths, "and rotation sliders");
+    label_row(ctx, widths, "will be added here.");
+
+    mu_end_window(ctx);
   }
 }
 
 static void draw_window_controls_window(mu_Context *ctx,
                                         bool *reset_widgets_requested,
                                         bool *reset_canvas_requested,
+                                        bool *reset_camera_controls_requested,
                                         bool *show_mesh_details_requested) {
   int window_controls_options = MU_OPT_NOCLOSE | MU_OPT_NORESIZE;
 
@@ -881,6 +915,10 @@ static void draw_window_controls_window(mu_Context *ctx,
 
     if (button_row(ctx, widths, "Show / Reset Scene Controls")) {
       *reset_widgets_requested = true;
+    }
+
+    if (button_row(ctx, widths, "Show / Reset Camera Controls")) {
+      *reset_camera_controls_requested = true;
     }
 
     if (button_row(ctx, widths, "Show / Reset Canvas")) {
@@ -898,6 +936,7 @@ static void draw_window_controls_window(mu_Context *ctx,
 static void handle_ui_reset_requests(mu_Context *ctx,
                                      bool *reset_widgets_requested,
                                      bool *reset_canvas_requested,
+                                     bool *reset_camera_controls_requested,
                                      bool *show_mesh_details_requested) {
   // Reset requests are set by buttons, then applied at the start of the next UI frame.
   if (*reset_widgets_requested) {
@@ -907,8 +946,15 @@ static void handle_ui_reset_requests(mu_Context *ctx,
 
 
   if (*reset_canvas_requested) {
+    g_show_canvas_window = true;
+    g_canvas_window_open = true;
     reset_ui_window(ctx, CANVAS_WINDOW_TITLE, DEFAULT_CANVAS_RECT);
     *reset_canvas_requested = false;
+  }
+
+  if (*reset_camera_controls_requested) {
+    reset_ui_window(ctx, CAMERA_CONTROLS_TITLE, DEFAULT_CAMERA_CONTROLS_RECT);
+    *reset_camera_controls_requested = false;
   }
 
   if (*show_mesh_details_requested) {
@@ -924,8 +970,13 @@ static void cache_all_ui_window_states(mu_Context *ctx) {
   cache_ui_window_state(ctx, WIDGETS_WINDOW_TITLE,
                         &g_widgets_window_rect, &g_widgets_window_open, false);
 
-  cache_ui_window_state(ctx, CANVAS_WINDOW_TITLE,
-                        &g_canvas_window_rect, &g_canvas_window_open, false);
+  if (g_show_canvas_window) {
+    cache_ui_window_state(ctx, CANVAS_WINDOW_TITLE,
+                          &g_canvas_window_rect, &g_canvas_window_open, false);
+  }
+
+  cache_ui_window_state(ctx, CAMERA_CONTROLS_TITLE,
+                        &g_camera_controls_window_rect, &g_camera_controls_window_open, false);
   cache_ui_window_state(ctx, WINDOW_CONTROLS_TITLE,
                         &g_window_controls_rect, &g_window_controls_open, true);
 
@@ -1357,6 +1408,7 @@ int main() {
     static bool quit_requested = false;
     static bool reset_widgets_requested = false;
     static bool reset_canvas_requested = false;
+    static bool reset_camera_controls_requested = false;
     static bool show_mesh_details_requested = false;
 
     mu_begin(ctx);
@@ -1364,12 +1416,15 @@ int main() {
     // Build all UI windows before rendering them into the framebuffer.
     handle_ui_reset_requests(ctx, &reset_widgets_requested,
                              &reset_canvas_requested,
+                             &reset_camera_controls_requested,
                              &show_mesh_details_requested);
     draw_widgets_window(ctx, &quit_requested);
+    draw_camera_controls_window(ctx);
     draw_creative_canvas_window(ctx);
     draw_mesh_details_window(ctx);
     draw_window_controls_window(ctx, &reset_widgets_requested,
                                 &reset_canvas_requested,
+                                &reset_camera_controls_requested,
                                 &show_mesh_details_requested);
     cache_all_ui_window_states(ctx);
 
@@ -1404,4 +1459,3 @@ int main() {
 }
 // cd "C:\courses\ComputerGraphics\cg-at-uoh-26-HalaIshan\nanorender"
 // powershell -ExecutionPolicy Bypass -File .\build_and_run.ps1
-
