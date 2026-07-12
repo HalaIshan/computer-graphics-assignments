@@ -56,7 +56,6 @@ struct ViewportTransform {
 
 struct MeshOption {
   const char *name;
-  const char *paths[3];
 };
 
 struct TransformParameters {
@@ -92,20 +91,17 @@ static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
 static const char *MESH_DETAILS_WINDOW_TITLE = "Mesh Details";       // Optional mesh debug info
 
-static const MeshOption MESH_OPTIONS[] = {
-    {"simple_pyramid.obj",
-     {"assets/hw2/models/simple_pyramid.obj",
-      "../assets/hw2/models/simple_pyramid.obj",
-      "../../assets/hw2/models/simple_pyramid.obj"}},
-    {"regular_cube.obj",
-     {"assets/hw2/models/regular_cube.obj",
-      "../assets/hw2/models/regular_cube.obj",
-      "../../assets/hw2/models/regular_cube.obj"}},
-    {"angled_box.obj",
-     {"assets/hw2/models/angled_box.obj",
-      "../assets/hw2/models/angled_box.obj",
-      "../../assets/hw2/models/angled_box.obj"}}};
+static const char *MODEL_SEARCH_PATHS[] = {
+    "assets/models/",
+    "../assets/models/",
+    "../../assets/models/"};
 
+static const MeshOption MESH_OPTIONS[] = {
+    {"simple_pyramid.obj"},
+    {"regular_cube.obj"},
+    {"angled_box.obj"}};
+
+static const int MODEL_SEARCH_PATH_COUNT = sizeof(MODEL_SEARCH_PATHS) / sizeof(MODEL_SEARCH_PATHS[0]);
 static const int MESH_OPTION_COUNT = sizeof(MESH_OPTIONS) / sizeof(MESH_OPTIONS[0]);
 static const int DEFAULT_MESH_INDEX = 1; // Start with the regular cube comparison mesh
 
@@ -117,6 +113,7 @@ static const float SCALE_MIN = 0.1f;
 static const float SCALE_MAX = 2.0f;
 static const float KEYBOARD_TRANSLATION_STEP = 0.03f; // Direct input movement speed
 static const float KEYBOARD_ROTATION_STEP = 2.0f;     // Direct input rotation speed
+static const float DEBUG_AXIS_LENGTH_RATIO = 0.65f;   // Axis length relative to mesh size
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
 static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 160};   // Upper right
@@ -129,6 +126,12 @@ static const mu_Color MESH_COLOR = {200, 180, 255, 255};             // Light pu
 static const mu_Color TRANSFORM_COLOR = {255, 220, 120, 255};        // Warm yellow
 static const mu_Color LINE_TOOLS_COLOR = {255, 180, 120, 255};       // Soft orange
 static const mu_Color WINDOW_CONTROLS_COLOR = {220, 220, 255, 255};  // Pale blue
+static const mu_Color DEBUG_COLOR = {130, 230, 255, 255};            // Cyan debug controls
+
+static const uint32_t AXIS_X_COLOR = MFB_RGB(255, 70, 70);    // Red X axis
+static const uint32_t AXIS_Y_COLOR = MFB_RGB(80, 230, 80);    // Green Y axis
+static const uint32_t AXIS_Z_COLOR = MFB_RGB(90, 140, 255);   // Blue Z axis
+static const uint32_t BOUNDING_BOX_COLOR = MFB_RGB(255, 225, 90); // Yellow box edges
 
 // Framebuffer state
 static uint32_t g_buffer[WIDTH * HEIGHT];
@@ -159,6 +162,10 @@ static TransformSpace g_transform_space = TRANSFORM_LOCAL;
 static TransformOperation g_transform_operation = TRANSFORM_TRANSLATION;
 static float g_model_size = 1.0f; // Uniform size multiplier for the whole model
 static TransformSpace g_keyboard_transform_space = TRANSFORM_WORLD; // Part 6 keyboard mode
+
+// Assignment 3 visual debugging state
+static int g_show_coordinate_axes = 1; // Draw world and local coordinate axes
+static int g_show_bounding_box = 1;     // Draw transformed mesh bounding box
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -789,6 +796,11 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
     reset_all_transforms();
   }
 
+  spacer_row(ctx, widths, 8);
+  colored_label_row(ctx, widths, "Debug drawing:", DEBUG_COLOR);
+  checkbox_row(ctx, widths, "Show coordinate axes", &g_show_coordinate_axes);
+  checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
+
   const char *keyboard_mode =
       g_keyboard_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
   char keyboard_mode_text[64];
@@ -1038,6 +1050,17 @@ static uint32_t get_wireframe_color() {
   return g_invert_colors ? MFB_RGB(245, 245, 245) : MFB_RGB(20, 20, 20);
 }
 
+static void draw_transformed_3d_line(const glm::vec3 &start,
+                                     const glm::vec3 &end,
+                                     const glm::mat4 &model_matrix,
+                                     uint32_t color) {
+  glm::vec3 transformed_start = apply_model_transform(start, model_matrix);
+  glm::vec3 transformed_end = apply_model_transform(end, model_matrix);
+  ScreenPoint p0 = project_vertex_orthographic(transformed_start, g_viewport_transform);
+  ScreenPoint p1 = project_vertex_orthographic(transformed_end, g_viewport_transform);
+  draw_line(p0.x, p0.y, p1.x, p1.y, color);
+}
+
 static void draw_mesh_wireframe() {
   if (!g_mesh_loaded || !g_viewport_transform.valid) {
     return;
@@ -1047,20 +1070,88 @@ static void draw_mesh_wireframe() {
   glm::mat4 model_matrix = build_model_matrix();
 
   for (const Face &face : g_loaded_mesh.faces) {
-    glm::vec3 v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
-                                         model_matrix);
-    glm::vec3 v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
-                                         model_matrix);
-    glm::vec3 v2 = apply_model_transform(g_loaded_mesh.vertices[face.v2],
-                                         model_matrix);
+    const glm::vec3 &v0 = g_loaded_mesh.vertices[face.v0];
+    const glm::vec3 &v1 = g_loaded_mesh.vertices[face.v1];
+    const glm::vec3 &v2 = g_loaded_mesh.vertices[face.v2];
 
-    ScreenPoint p0 = project_vertex_orthographic(v0, g_viewport_transform);
-    ScreenPoint p1 = project_vertex_orthographic(v1, g_viewport_transform);
-    ScreenPoint p2 = project_vertex_orthographic(v2, g_viewport_transform);
+    draw_transformed_3d_line(v0, v1, model_matrix, wireframe_color);
+    draw_transformed_3d_line(v1, v2, model_matrix, wireframe_color);
+    draw_transformed_3d_line(v2, v0, model_matrix, wireframe_color);
+  }
+}
 
-    draw_line(p0.x, p0.y, p1.x, p1.y, wireframe_color);
-    draw_line(p1.x, p1.y, p2.x, p2.y, wireframe_color);
-    draw_line(p2.x, p2.y, p0.x, p0.y, wireframe_color);
+static float debug_axis_length() {
+  glm::vec3 mesh_size = g_viewport_transform.box.max - g_viewport_transform.box.min;
+  float max_extent = std::max(mesh_size.x, std::max(mesh_size.y, mesh_size.z));
+  return max_extent * DEBUG_AXIS_LENGTH_RATIO;
+}
+
+static void draw_projected_3d_line(const glm::vec3 &start,
+                                   const glm::vec3 &end,
+                                   uint32_t color) {
+  draw_transformed_3d_line(start, end, glm::mat4(1.0f), color);
+}
+
+static void draw_axis_tripod(const glm::vec3 &origin,
+                             const glm::vec3 &x_end,
+                             const glm::vec3 &y_end,
+                             const glm::vec3 &z_end) {
+  draw_projected_3d_line(origin, x_end, AXIS_X_COLOR);
+  draw_projected_3d_line(origin, y_end, AXIS_Y_COLOR);
+  draw_projected_3d_line(origin, z_end, AXIS_Z_COLOR);
+}
+
+static void draw_coordinate_axes() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_coordinate_axes) {
+    return;
+  }
+
+  float axis_length = debug_axis_length();
+  if (axis_length <= 0.0f) {
+    return;
+  }
+
+  glm::vec3 world_origin(0.0f);
+  draw_axis_tripod(world_origin,
+                   world_origin + glm::vec3(axis_length, 0.0f, 0.0f),
+                   world_origin + glm::vec3(0.0f, axis_length, 0.0f),
+                   world_origin + glm::vec3(0.0f, 0.0f, axis_length));
+
+  glm::mat4 model_matrix = build_model_matrix();
+  glm::vec3 local_origin = g_viewport_transform.center;
+  glm::vec3 local_x = local_origin + glm::vec3(axis_length, 0.0f, 0.0f);
+  glm::vec3 local_y = local_origin + glm::vec3(0.0f, axis_length, 0.0f);
+  glm::vec3 local_z = local_origin + glm::vec3(0.0f, 0.0f, axis_length);
+
+  draw_transformed_3d_line(local_origin, local_x, model_matrix, AXIS_X_COLOR);
+  draw_transformed_3d_line(local_origin, local_y, model_matrix, AXIS_Y_COLOR);
+  draw_transformed_3d_line(local_origin, local_z, model_matrix, AXIS_Z_COLOR);
+}
+static void draw_bounding_box() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_bounding_box) {
+    return;
+  }
+
+  const BoundingBox &box = g_viewport_transform.box;
+  const glm::vec3 corners[] = {
+      {box.min.x, box.min.y, box.min.z},
+      {box.max.x, box.min.y, box.min.z},
+      {box.min.x, box.max.y, box.min.z},
+      {box.max.x, box.max.y, box.min.z},
+      {box.min.x, box.min.y, box.max.z},
+      {box.max.x, box.min.y, box.max.z},
+      {box.min.x, box.max.y, box.max.z},
+      {box.max.x, box.max.y, box.max.z}};
+
+  const int edges[][2] = {
+      {0, 1}, {1, 3}, {3, 2}, {2, 0},
+      {4, 5}, {5, 7}, {7, 6}, {6, 4},
+      {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+
+  glm::mat4 model_matrix = build_model_matrix();
+  for (const auto &edge : edges) {
+    draw_transformed_3d_line(corners[edge[0]], corners[edge[1]],
+                             model_matrix, BOUNDING_BOX_COLOR);
   }
 }
 
@@ -1179,12 +1270,13 @@ static bool load_mesh_option(int option_index) {
   Mesh loaded_mesh;
   const MeshOption &option = MESH_OPTIONS[option_index];
 
-  for (const char *path : option.paths) {
-    if (load_obj_file(path, loaded_mesh, g_mesh_status, sizeof(g_mesh_status))) {
+  for (int i = 0; i < MODEL_SEARCH_PATH_COUNT; i++) {
+    std::string path = std::string(MODEL_SEARCH_PATHS[i]) + option.name;
+    if (load_obj_file(path.c_str(), loaded_mesh, g_mesh_status, sizeof(g_mesh_status))) {
       g_loaded_mesh = loaded_mesh;
       g_mesh_loaded = true;
       g_selected_mesh_index = option_index;
-      snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "%s", path);
+      snprintf(g_mesh_path_used, sizeof(g_mesh_path_used), "%s", path.c_str());
       g_viewport_transform = calculate_viewport_transform(g_loaded_mesh);
       reset_all_transforms();
       return true;
@@ -1290,6 +1382,8 @@ int main() {
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
     draw_mesh_wireframe();
+    draw_bounding_box();
+    draw_coordinate_axes();
     draw_line_overlay();
 
     // 4. UI Rendering
@@ -1310,3 +1404,4 @@ int main() {
 }
 // cd "C:\courses\ComputerGraphics\cg-at-uoh-26-HalaIshan\nanorender"
 // powershell -ExecutionPolicy Bypass -File .\build_and_run.ps1
+

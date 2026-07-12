@@ -134,6 +134,8 @@ I also added a model selector, making the panel clearer and leaving space for up
 
 The models are stored in `nanorender/assets/hw2/models/` and defined in the `MESH_OPTIONS` list. The following demo shows the selector changing the model and immediately updating its information and wireframe:
 
+Later, while starting Assignment 3, I moved the reusable OBJ models to the shared folder `nanorender/assets/models/` and updated the renderer to load them from there.
+
 <img src="../assets/hw2/gifs/part3_model_selector_demo.gif" alt="Switching between the Part 3 OBJ models" width="600">
 
 ---
@@ -227,3 +229,4 @@ This assignment helped me understand the basic flow of a 3D rendering pipeline, 
 I enjoyed working on this assignment because it was clear, practical, and lightweight. Seeing the model respond to both GUI sliders and keyboard input made the graphics concepts feel more interactive and easier to understand.
 
 Since I completed the assignment individually, the pair-programming extensions in Part 7 were not required.
+
