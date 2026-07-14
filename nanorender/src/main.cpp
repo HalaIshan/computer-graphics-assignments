@@ -39,6 +39,8 @@ struct Face {
 struct Mesh {
   std::vector<glm::vec3> vertices;
   std::vector<Face> faces;
+  std::vector<glm::vec3> face_normals;
+  std::vector<glm::vec3> vertex_normals;
 };
 
 struct BoundingBox {
@@ -125,6 +127,8 @@ static const float SCALE_MAX = 2.0f;
 static const float KEYBOARD_TRANSLATION_STEP = 0.03f; // Direct input movement speed
 static const float KEYBOARD_ROTATION_STEP = 2.0f;     // Direct input rotation speed
 static const float DEBUG_AXIS_LENGTH_RATIO = 0.65f;   // Axis length relative to mesh size
+static const float NORMAL_LENGTH_RATIO = 0.18f;       // Normal debug length relative to mesh size
+static const float NORMAL_ARROW_HEAD_RATIO = 0.35f;   // Arrow head length relative to normal line
 static const float VIEWPORT_TARGET_SIZE = 300.0f;      // Half-size default fit for camera tests
 static const float CAMERA_POSITION_MIN = -4.0f;        // Camera movement range
 static const float CAMERA_POSITION_MAX = 8.0f;
@@ -144,7 +148,7 @@ static const float FAR_PLANE_MAX = 50.0f;
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
 static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 220};   // Upper right
 static const mu_Rect DEFAULT_CAMERA_CONTROLS_RECT = {1220, 270, 360, 600};  // Camera setup panel
-static const mu_Rect DEFAULT_CANVAS_RECT = {1220, 650, 360, 240};           // Hidden drawing tools panel
+static const mu_Rect DEFAULT_CANVAS_RECT = {520, 260, 640, 360};             // Hidden drawing tools panel
 static const mu_Rect DEFAULT_MESH_DETAILS_RECT = {500, 20, 420, 230};       // Hidden until requested
 
 static const mu_Color KEYBOARD_COLOR = {100, 200, 255, 255};         // Light blue
@@ -160,6 +164,8 @@ static const uint32_t AXIS_X_COLOR = MFB_RGB(255, 70, 70);    // Red X axis
 static const uint32_t AXIS_Y_COLOR = MFB_RGB(80, 230, 80);    // Green Y axis
 static const uint32_t AXIS_Z_COLOR = MFB_RGB(90, 140, 255);   // Blue Z axis
 static const uint32_t BOUNDING_BOX_COLOR = MFB_RGB(255, 225, 90); // Yellow box edges
+static const uint32_t FACE_NORMAL_COLOR = MFB_RGB(255, 120, 220);  // Pink face normals
+static const uint32_t VERTEX_NORMAL_COLOR = MFB_RGB(80, 255, 230); // Cyan vertex normals
 
 // Framebuffer state
 static uint32_t g_buffer[WIDTH * HEIGHT];
@@ -196,7 +202,7 @@ static CameraParameters g_camera = {
     glm::vec3(0.0f, 0.0f, DEFAULT_CAMERA_DISTANCE), glm::vec3(0.0f)};
 
 // Assignment 3 projection state
-static ProjectionMode g_projection_mode = PROJECTION_ORTHOGRAPHIC;
+static ProjectionMode g_projection_mode = PROJECTION_PERSPECTIVE;
 static float g_projection_fov_degrees = DEFAULT_FOV_DEGREES;
 static float g_projection_near_plane = DEFAULT_NEAR_PLANE;
 static float g_projection_far_plane = DEFAULT_FAR_PLANE;
@@ -204,9 +210,12 @@ static float g_projection_far_plane = DEFAULT_FAR_PLANE;
 // Assignment 3 visual debugging state
 static int g_show_coordinate_axes = 0; // Draw world and local coordinate axes
 static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
+static int g_show_face_normals = 0;     // Draw one normal from each triangle center
+static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh vertices
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
+static int g_manual_line_drawing_enabled = 0;
 static bool g_is_drawing_line = false;
 static int g_line_start_x = 0;
 static int g_line_start_y = 0;
@@ -247,6 +256,14 @@ static uint32_t get_current_line_color() {
   return MFB_RGB((uint8_t)g_line_color_r,
                  (uint8_t)g_line_color_g,
                  (uint8_t)g_line_color_b);
+}
+
+static glm::vec3 normalize_or_zero(const glm::vec3 &value) {
+  if (glm::length(value) <= 0.0001f) {
+    return glm::vec3(0.0f);
+  }
+
+  return glm::normalize(value);
 }
 
 static int clamp_int(int value, int min_value, int max_value) {
@@ -354,6 +371,12 @@ static void cache_ui_window_state(mu_Context *ctx, const char *title,
 
 // Line drawing input
 static void update_line_drawing(mu_Context *ctx) {
+  if (!g_manual_line_drawing_enabled) {
+    g_is_drawing_line = false;
+    g_previous_left_down = (ctx->mouse_down & MU_MOUSE_LEFT) != 0;
+    return;
+  }
+
   bool left_down = (ctx->mouse_down & MU_MOUSE_LEFT) != 0;
 
   int mouse_x = ctx->mouse_pos.x;
@@ -948,6 +971,8 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   colored_label_row(ctx, widths, "Debug drawing:", DEBUG_COLOR);
   checkbox_row(ctx, widths, "Show coordinate axes", &g_show_coordinate_axes);
   checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
+  checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
+  checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
 
   const char *keyboard_mode =
       g_keyboard_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
@@ -998,7 +1023,13 @@ static void draw_creative_canvas_window(mu_Context *ctx) {
     mu_Color line_tools_color = LINE_TOOLS_COLOR;
 
     colored_label_row(ctx, widths, "Line drawing tools:", line_tools_color);
-    colored_label_row(ctx, widths, "Drag in the empty area to draw a line", line_tools_color);
+    checkbox_row(ctx, widths, "Enable manual drawing", &g_manual_line_drawing_enabled);
+    if (g_manual_line_drawing_enabled) {
+      colored_label_row(ctx, widths, "Drag in the empty area to draw a line", line_tools_color);
+    } else {
+      colored_label_row(ctx, widths, "Manual drawing is off", line_tools_color);
+      g_is_drawing_line = false;
+    }
 
     spacer_row(ctx, widths, 8);
 
@@ -1283,21 +1314,26 @@ static uint32_t get_wireframe_color() {
   return g_invert_colors ? MFB_RGB(245, 245, 245) : MFB_RGB(20, 20, 20);
 }
 
+static void draw_view_space_3d_line(const glm::vec3 &start,
+                                    const glm::vec3 &end,
+                                    uint32_t color) {
+  ScreenPoint p0;
+  ScreenPoint p1;
+  if (!project_transformed_vertex(start, p0) ||
+      !project_transformed_vertex(end, p1)) {
+    return;
+  }
+
+  draw_line(p0.x, p0.y, p1.x, p1.y, color);
+}
+
 static void draw_transformed_3d_line(const glm::vec3 &start,
                                      const glm::vec3 &end,
                                      const glm::mat4 &model_matrix,
                                      uint32_t color) {
   glm::vec3 transformed_start = apply_model_transform(start, model_matrix);
   glm::vec3 transformed_end = apply_model_transform(end, model_matrix);
-
-  ScreenPoint p0;
-  ScreenPoint p1;
-  if (!project_transformed_vertex(transformed_start, p0) ||
-      !project_transformed_vertex(transformed_end, p1)) {
-    return;
-  }
-
-  draw_line(p0.x, p0.y, p1.x, p1.y, color);
+  draw_view_space_3d_line(transformed_start, transformed_end, color);
 }
 
 static void draw_mesh_wireframe() {
@@ -1319,10 +1355,21 @@ static void draw_mesh_wireframe() {
   }
 }
 
-static float debug_axis_length() {
+static float mesh_max_extent() {
   glm::vec3 mesh_size = g_viewport_transform.box.max - g_viewport_transform.box.min;
-  float max_extent = std::max(mesh_size.x, std::max(mesh_size.y, mesh_size.z));
-  return max_extent * DEBUG_AXIS_LENGTH_RATIO;
+  return std::max(mesh_size.x, std::max(mesh_size.y, mesh_size.z));
+}
+
+static float debug_length(float ratio) {
+  return mesh_max_extent() * ratio;
+}
+
+static float debug_axis_length() {
+  return debug_length(DEBUG_AXIS_LENGTH_RATIO);
+}
+
+static float normal_debug_length() {
+  return debug_length(NORMAL_LENGTH_RATIO);
 }
 
 static void draw_projected_3d_line(const glm::vec3 &start,
@@ -1395,6 +1442,99 @@ static void draw_bounding_box() {
   }
 }
 
+static glm::vec3 transform_normal_direction(const glm::vec3 &normal,
+                                            const glm::mat4 &model_view_matrix) {
+  glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(model_view_matrix)));
+  return normalize_or_zero(normal_matrix * normal);
+}
+
+static glm::vec3 normal_arrow_side_direction(const glm::vec3 &view_normal) {
+  glm::vec3 reference_axis = std::abs(view_normal.y) < 0.9f
+                                 ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                 : glm::vec3(1.0f, 0.0f, 0.0f);
+  return normalize_or_zero(glm::cross(view_normal, reference_axis));
+}
+
+static void draw_normal_arrow_head(const glm::vec3 &tip,
+                                   const glm::vec3 &view_normal,
+                                   float length,
+                                   uint32_t color) {
+  float head_length = length * NORMAL_ARROW_HEAD_RATIO;
+  glm::vec3 side = normal_arrow_side_direction(view_normal);
+
+  if (head_length <= 0.0f || glm::length(side) <= 0.0001f) {
+    return;
+  }
+
+  glm::vec3 base = tip - view_normal * head_length;
+  draw_view_space_3d_line(tip, base + side * head_length * 0.5f, color);
+  draw_view_space_3d_line(tip, base - side * head_length * 0.5f, color);
+}
+
+static void draw_normal_debug_line(const glm::vec3 &origin,
+                                   const glm::vec3 &normal,
+                                   const glm::mat4 &model_view_matrix,
+                                   float length,
+                                   uint32_t color) {
+  glm::vec3 view_origin = apply_model_transform(origin, model_view_matrix);
+  glm::vec3 view_normal = transform_normal_direction(normal, model_view_matrix);
+
+  if (glm::length(view_normal) <= 0.0001f) {
+    return;
+  }
+
+  glm::vec3 tip = view_origin + view_normal * length;
+  draw_view_space_3d_line(view_origin, tip, color);
+  draw_normal_arrow_head(tip, view_normal, length, color);
+}
+
+static void draw_face_normals() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_face_normals) {
+    return;
+  }
+
+  if (g_loaded_mesh.face_normals.size() != g_loaded_mesh.faces.size()) {
+    return;
+  }
+
+  float normal_length = normal_debug_length();
+  if (normal_length <= 0.0f) {
+    return;
+  }
+
+  glm::mat4 model_view_matrix = build_model_view_matrix(build_model_matrix());
+  for (size_t i = 0; i < g_loaded_mesh.faces.size(); i++) {
+    const Face &face = g_loaded_mesh.faces[i];
+    glm::vec3 center = (g_loaded_mesh.vertices[face.v0] +
+                        g_loaded_mesh.vertices[face.v1] +
+                        g_loaded_mesh.vertices[face.v2]) / 3.0f;
+
+    draw_normal_debug_line(center, g_loaded_mesh.face_normals[i],
+                           model_view_matrix, normal_length, FACE_NORMAL_COLOR);
+  }
+}
+
+static void draw_vertex_normals() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_vertex_normals) {
+    return;
+  }
+
+  if (g_loaded_mesh.vertex_normals.size() != g_loaded_mesh.vertices.size()) {
+    return;
+  }
+
+  float normal_length = normal_debug_length();
+  if (normal_length <= 0.0f) {
+    return;
+  }
+
+  glm::mat4 model_view_matrix = build_model_view_matrix(build_model_matrix());
+  for (size_t i = 0; i < g_loaded_mesh.vertices.size(); i++) {
+    draw_normal_debug_line(g_loaded_mesh.vertices[i], g_loaded_mesh.vertex_normals[i],
+                           model_view_matrix, normal_length, VERTEX_NORMAL_COLOR);
+  }
+}
+
 // OBJ loading helpers
 static bool parse_obj_face_index(const std::string &token, int &index) {
   // OBJ face tokens can look like:
@@ -1424,9 +1564,36 @@ static bool parse_obj_face_index(const std::string &token, int &index) {
   return true;
 }
 
+static void compute_mesh_normals(Mesh &mesh) {
+  mesh.face_normals.assign(mesh.faces.size(), glm::vec3(0.0f));
+  mesh.vertex_normals.assign(mesh.vertices.size(), glm::vec3(0.0f));
+
+  for (size_t i = 0; i < mesh.faces.size(); i++) {
+    const Face &face = mesh.faces[i];
+    const glm::vec3 &v0 = mesh.vertices[face.v0];
+    const glm::vec3 &v1 = mesh.vertices[face.v1];
+    const glm::vec3 &v2 = mesh.vertices[face.v2];
+
+    glm::vec3 edge1 = v1 - v0;
+    glm::vec3 edge2 = v2 - v0;
+    glm::vec3 face_normal = normalize_or_zero(glm::cross(edge1, edge2));
+
+    mesh.face_normals[i] = face_normal;
+    mesh.vertex_normals[face.v0] += face_normal;
+    mesh.vertex_normals[face.v1] += face_normal;
+    mesh.vertex_normals[face.v2] += face_normal;
+  }
+
+  for (glm::vec3 &vertex_normal : mesh.vertex_normals) {
+    vertex_normal = normalize_or_zero(vertex_normal);
+  }
+}
+
 static bool load_obj_file(const char *filename, Mesh &mesh, char *status, int status_size) {
   mesh.vertices.clear();
   mesh.faces.clear();
+  mesh.face_normals.clear();
+  mesh.vertex_normals.clear();
 
   std::ifstream file(filename);
 
@@ -1493,6 +1660,8 @@ static bool load_obj_file(const char *filename, Mesh &mesh, char *status, int st
     snprintf(status, status_size, "OBJ file loaded, but it has no vertices or no faces");
     return false;
   }
+
+  compute_mesh_normals(mesh);
 
   snprintf(status, status_size,
            "Loaded OBJ successfully: %zu vertices, %zu faces",
@@ -1628,6 +1797,8 @@ int main() {
     draw_mesh_wireframe();
     draw_bounding_box();
     draw_coordinate_axes();
+    draw_face_normals();
+    draw_vertex_normals();
     draw_line_overlay();
 
     // 4. UI Rendering

@@ -184,6 +184,54 @@ I switched between Orthographic and Perspective mode with the same model and cam
   </tr>
 </table>
 
-### Part 3 Summary
+**Extra check:** I also tested the regular cube in Perspective mode. The front and back faces do not overlap perfectly, so the depth difference is visible. The diagonal lines are expected because the cube is drawn as triangle wireframe faces.
+
+<img src="../assets/hw3/images/hw3_part3_cube_perspective.png" alt="Regular cube in perspective projection" width="300">
+
+### In short:
 
 This part adds Perspective projection without removing the old Orthographic renderer. The tests show that the projection toggle works, the perspective matrix uses depth, the FOV changes the zoomed-in or zoomed-out feeling, and the Near/Far values control the visible depth range. The extra camera rotation test also shows that the existing View Matrix still works correctly before the new Projection Matrix is applied.
+
+---
+## Part 4: Calculating Normals
+
+### Normal Calculation Implementation
+
+For this part, I calculated two kinds of normals for the loaded mesh: face normals and vertex normals.
+
+A face normal belongs to one triangle. I calculate it using two triangle edges and the cross product, then normalize the result so it becomes a unit direction vector:
+
+`edge1 = v1 - v0`<br>
+`edge2 = v2 - v0`<br>
+`Face Normal = normalize(cross(edge1, edge2))`
+
+A vertex normal belongs to one vertex. I calculate it by averaging the normals of all triangles connected to that vertex:
+
+`Vertex Normal = normalize(sum of connected face normals)`
+
+To check the result visually, I added two debug options: `Show face normals` and `Show vertex normals`. Face normals are drawn from the triangle centers, and vertex normals are drawn from the vertices. I also added a small arrow head to show the direction. Face normals are pink, and vertex normals are cyan.
+
+<img src="../assets/hw3/images/hw3_part4_normals_controls.png" alt="Normal debug drawing controls" width="300">
+
+### Normal Drawing Tests
+
+I used the pyramid model for these tests because its faces and vertices are easy to see. I tested face normals and vertex normals separately so the scene does not become too crowded.
+
+<table>
+  <tr>
+    <th>Face Normals</th>
+    <th>Vertex Normals</th>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw3/gifs/hw3_part4_face_normals.gif" alt="Face normals drawn from triangle centers" width="500"></td>
+    <td><img src="../assets/hw3/gifs/hw3_part4_vertex_normals.gif" alt="Vertex normals drawn from mesh vertices" width="500"></td>
+  </tr>
+  <tr>
+    <td>
+      I enabled only <code>Show face normals</code>. The normal lines start from the center of each triangle and point outward from the face. When I rotate the model, the normal lines rotate with it, which shows that they use the same model transformation as the mesh.
+    </td>
+    <td>
+      I enabled only <code>Show vertex normals</code>. These normals start from the vertices, and each one is based on the average of the surrounding face normals. When the model rotates, the vertex normals stay attached to the mesh vertices.
+    </td>
+  </tr>
+</table>
