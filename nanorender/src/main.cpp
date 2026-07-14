@@ -83,6 +83,12 @@ struct ScreenRect {
   int max_y;
 };
 
+struct BarycentricWeights {
+  float alpha;
+  float beta;
+  float gamma;
+};
+
 enum BackgroundMode {
   BACKGROUND_PLAIN,
   BACKGROUND_CIRCLES,
@@ -221,7 +227,7 @@ static int g_show_face_normals = 0;     // Draw one normal from each triangle ce
 static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh vertices
 
 // Assignment 4 rasterization debug state
-static int g_show_triangle_bounding_boxes = 0; // Draw filled 2D triangle bounding rectangles
+static int g_show_filled_triangles = 0; // Draw solid triangles with barycentric rasterization
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -983,7 +989,7 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
   checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
-  checkbox_row(ctx, widths, "Show triangle boxes", &g_show_triangle_bounding_boxes);
+  checkbox_row(ctx, widths, "Show filled triangles", &g_show_filled_triangles);
 
   const char *keyboard_mode =
       g_keyboard_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
@@ -1379,10 +1385,45 @@ static bool clip_screen_rect(ScreenRect &rect) {
   return rect.min_x <= rect.max_x && rect.min_y <= rect.max_y;
 }
 
-static void fill_screen_rect(const ScreenRect &rect, uint32_t color) {
+static BarycentricWeights barycentric_coordinates(float x, float y,
+                                                  const ScreenPoint &p0,
+                                                  const ScreenPoint &p1,
+                                                  const ScreenPoint &p2) {
+  float denominator = (float)((p1.y - p2.y) * (p0.x - p2.x) +
+                              (p2.x - p1.x) * (p0.y - p2.y));
+
+  if (std::abs(denominator) < 0.0001f) {
+    return {-1.0f, -1.0f, -1.0f};
+  }
+
+  float alpha = ((float)(p1.y - p2.y) * (x - (float)p2.x) +
+                 (float)(p2.x - p1.x) * (y - (float)p2.y)) / denominator;
+  float beta = ((float)(p2.y - p0.y) * (x - (float)p2.x) +
+                (float)(p0.x - p2.x) * (y - (float)p2.y)) / denominator;
+  float gamma = 1.0f - alpha - beta;
+
+  return {alpha, beta, gamma};
+}
+
+static bool is_inside_triangle(const BarycentricWeights &weights) {
+  return weights.alpha >= 0.0f && weights.alpha <= 1.0f &&
+         weights.beta >= 0.0f && weights.beta <= 1.0f &&
+         weights.gamma >= 0.0f && weights.gamma <= 1.0f;
+}
+
+static void fill_triangle_in_bounds(const ScreenRect &rect,
+                                    const ScreenPoint &p0,
+                                    const ScreenPoint &p1,
+                                    const ScreenPoint &p2,
+                                    uint32_t color) {
   for (int y = rect.min_y; y <= rect.max_y; y++) {
     for (int x = rect.min_x; x <= rect.max_x; x++) {
-      draw_pixel(x, y, color);
+      BarycentricWeights weights = barycentric_coordinates((float)x + 0.5f,
+                                                           (float)y + 0.5f,
+                                                           p0, p1, p2);
+      if (is_inside_triangle(weights)) {
+        draw_pixel(x, y, color);
+      }
     }
   }
 }
@@ -1404,7 +1445,7 @@ static bool project_face_to_screen(const Face &face,
          project_transformed_vertex(v2, p2);
 }
 
-static void draw_triangle_bounding_boxes() {
+static void draw_filled_triangles() {
   if (!g_mesh_loaded || !g_viewport_transform.valid) {
     return;
   }
@@ -1425,7 +1466,7 @@ static void draw_triangle_bounding_boxes() {
       continue;
     }
 
-    fill_screen_rect(rect, triangle_debug_color(i));
+    fill_triangle_in_bounds(rect, p0, p1, p2, triangle_debug_color(i));
   }
 }
 
@@ -1887,8 +1928,8 @@ int main() {
     }
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
-    if (g_show_triangle_bounding_boxes) {
-      draw_triangle_bounding_boxes();
+    if (g_show_filled_triangles) {
+      draw_filled_triangles();
     } else {
       draw_mesh_wireframe();
     }
