@@ -235,3 +235,10 @@ I used the pyramid model for these tests because its faces and vertices are easy
     </td>
   </tr>
 </table>
+
+---
+## Final Overview
+
+By the end of this assignment, the renderer has a clearer 3D pipeline. The debug drawings, camera controls, perspective projection, and normal visualization all work together to make the model easier to inspect and understand.
+
+This completes Assignment 3 and prepares the renderer for the next steps.
