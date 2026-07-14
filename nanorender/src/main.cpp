@@ -91,6 +91,11 @@ enum TransformOperation {
   TRANSFORM_SCALE
 };
 
+enum ProjectionMode {
+  PROJECTION_ORTHOGRAPHIC,
+  PROJECTION_PERSPECTIVE
+};
+
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *CAMERA_CONTROLS_TITLE = "Camera Controls";         // Camera setup panel
@@ -122,9 +127,19 @@ static const float KEYBOARD_ROTATION_STEP = 2.0f;     // Direct input rotation s
 static const float DEBUG_AXIS_LENGTH_RATIO = 0.65f;   // Axis length relative to mesh size
 static const float VIEWPORT_TARGET_SIZE = 300.0f;      // Half-size default fit for camera tests
 static const float CAMERA_POSITION_MIN = -4.0f;        // Camera movement range
-static const float CAMERA_POSITION_MAX = 4.0f;
+static const float CAMERA_POSITION_MAX = 8.0f;
 static const float CAMERA_ROTATION_MIN = -180.0f;      // Camera rotation range
 static const float CAMERA_ROTATION_MAX = 180.0f;
+static const float DEFAULT_CAMERA_DISTANCE = 5.0f;     // Keeps perspective mode visible
+static const float DEFAULT_FOV_DEGREES = 60.0f;
+static const float DEFAULT_NEAR_PLANE = 0.1f;
+static const float DEFAULT_FAR_PLANE = 50.0f;
+static const float FOV_MIN = 30.0f;
+static const float FOV_MAX = 120.0f;
+static const float NEAR_PLANE_MIN = 0.1f;
+static const float NEAR_PLANE_MAX = 5.0f;
+static const float FAR_PLANE_MIN = 2.0f;
+static const float FAR_PLANE_MAX = 50.0f;
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
 static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 220};   // Upper right
@@ -178,11 +193,17 @@ static TransformSpace g_keyboard_transform_space = TRANSFORM_WORLD; // Part 6 ke
 
 // Assignment 3 camera state
 static CameraParameters g_camera = {
-    glm::vec3(0.0f), glm::vec3(0.0f)};
+    glm::vec3(0.0f, 0.0f, DEFAULT_CAMERA_DISTANCE), glm::vec3(0.0f)};
+
+// Assignment 3 projection state
+static ProjectionMode g_projection_mode = PROJECTION_ORTHOGRAPHIC;
+static float g_projection_fov_degrees = DEFAULT_FOV_DEGREES;
+static float g_projection_near_plane = DEFAULT_NEAR_PLANE;
+static float g_projection_far_plane = DEFAULT_FAR_PLANE;
 
 // Assignment 3 visual debugging state
-static int g_show_coordinate_axes = 1; // Draw world and local coordinate axes
-static int g_show_bounding_box = 1;     // Draw transformed mesh bounding box
+static int g_show_coordinate_axes = 0; // Draw world and local coordinate axes
+static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -429,13 +450,14 @@ static void axis_slider_row(mu_Context *ctx, const char *axis,
 
 static void compact_axis_slider_row(mu_Context *ctx, const char *axis,
                                     float *value, float low, float high,
-                                    const char *reset_label) {
+                                    const char *reset_label,
+                                    float default_value = 0.0f) {
   int widths[] = {24, 210, 92};
   mu_layout_row(ctx, 3, widths, 0);
   mu_label(ctx, axis);
   mu_slider(ctx, value, low, high);
   if (mu_button(ctx, reset_label)) {
-    *value = 0.0f;
+    *value = default_value;
   }
 }
 
@@ -447,6 +469,32 @@ static void uniform_scale_row(mu_Context *ctx) {
   if (mu_button(ctx, "Reset Size")) {
     g_model_size = 1.0f;
   }
+}
+
+static void keep_projection_planes_valid() {
+  if (g_projection_near_plane >= g_projection_far_plane) {
+    g_projection_far_plane = g_projection_near_plane + 0.1f;
+  }
+
+  if (g_projection_far_plane > FAR_PLANE_MAX) {
+    g_projection_far_plane = FAR_PLANE_MAX;
+    g_projection_near_plane = g_projection_far_plane - 0.1f;
+  }
+}
+
+static void projection_value_slider_row(mu_Context *ctx, int *widths,
+                                        const char *label, float *value,
+                                        float low, float high) {
+  char text[96];
+  snprintf(text, sizeof(text), "%s %.2f", label, *value);
+  label_row(ctx, widths, text);
+  mu_slider(ctx, value, low, high);
+}
+
+static void reset_projection_parameters() {
+  g_projection_fov_degrees = DEFAULT_FOV_DEGREES;
+  g_projection_near_plane = DEFAULT_NEAR_PLANE;
+  g_projection_far_plane = DEFAULT_FAR_PLANE;
 }
 
 static bool load_mesh_option(int option_index);
@@ -527,6 +575,50 @@ static ScreenPoint project_vertex_orthographic(const glm::vec3 &vertex,
       (int)std::lround((HEIGHT - 1) - mapped.y)}; // Flip y only for screen drawing
 }
 
+static glm::mat4 build_projection_matrix() {
+  float aspect_ratio = (float)WIDTH / (float)HEIGHT;
+  return glm::perspective(glm::radians(g_projection_fov_degrees),
+                          aspect_ratio,
+                          g_projection_near_plane,
+                          g_projection_far_plane);
+}
+
+static ScreenPoint ndc_to_screen(const glm::vec3 &ndc) {
+  float screen_x = (ndc.x + 1.0f) * 0.5f * (float)(WIDTH - 1);
+  float screen_y = (1.0f - (ndc.y + 1.0f) * 0.5f) * (float)(HEIGHT - 1);
+
+  return {
+      (int)std::lround(screen_x),
+      (int)std::lround(screen_y)};
+}
+
+static bool project_vertex_perspective(const glm::vec3 &view_vertex,
+                                       ScreenPoint &screen_point) {
+  glm::vec4 clip = build_projection_matrix() * glm::vec4(view_vertex, 1.0f);
+
+  if (std::abs(clip.w) < 0.0001f) {
+    return false;
+  }
+
+  glm::vec3 ndc = glm::vec3(clip) / clip.w; // Perspective divide
+  if (ndc.z < -1.0f || ndc.z > 1.0f) {
+    return false;
+  }
+
+  screen_point = ndc_to_screen(ndc);
+  return true;
+}
+
+static bool project_transformed_vertex(const glm::vec3 &view_vertex,
+                                       ScreenPoint &screen_point) {
+  if (g_projection_mode == PROJECTION_PERSPECTIVE) {
+    return project_vertex_perspective(view_vertex, screen_point);
+  }
+
+  screen_point = project_vertex_orthographic(view_vertex, g_viewport_transform);
+  return true;
+}
+
 static glm::mat4 build_rotation_matrix(const glm::vec3 &rotation_degrees) {
   glm::mat4 rotation(1.0f);
   rotation = glm::rotate(rotation, glm::radians(rotation_degrees.x),
@@ -602,7 +694,7 @@ static void reset_all_transforms() {
 }
 
 static void reset_camera() {
-  g_camera.position = glm::vec3(0.0f);
+  g_camera.position = glm::vec3(0.0f, 0.0f, DEFAULT_CAMERA_DISTANCE);
   g_camera.rotation_degrees = glm::vec3(0.0f);
 }
 
@@ -935,7 +1027,33 @@ static void draw_camera_controls_window(mu_Context *ctx) {
     int widths[] = {-1};
 
     colored_label_row(ctx, widths, "Camera controls:", CAMERA_COLOR);
-    label_row(ctx, widths, "View Matrix = inverse(Camera Matrix)");
+    colored_label_row(ctx, widths, "Projection mode:", CAMERA_COLOR);
+    int projection_widths[] = {160, 160};
+    mu_layout_row(ctx, 2, projection_widths, 0);
+    if (mu_button(ctx, g_projection_mode == PROJECTION_ORTHOGRAPHIC
+                           ? "> Orthographic" : "Orthographic")) {
+      g_projection_mode = PROJECTION_ORTHOGRAPHIC;
+    }
+    if (mu_button(ctx, g_projection_mode == PROJECTION_PERSPECTIVE
+                           ? "> Perspective" : "Perspective")) {
+      g_projection_mode = PROJECTION_PERSPECTIVE;
+    }
+
+    if (g_projection_mode == PROJECTION_PERSPECTIVE) {
+      projection_value_slider_row(ctx, widths, "FOV / View zoom:",
+                                  &g_projection_fov_degrees, FOV_MIN, FOV_MAX);
+      projection_value_slider_row(ctx, widths, "Near:",
+                                  &g_projection_near_plane,
+                                  NEAR_PLANE_MIN, NEAR_PLANE_MAX);
+      projection_value_slider_row(ctx, widths, "Far:",
+                                  &g_projection_far_plane,
+                                  FAR_PLANE_MIN, FAR_PLANE_MAX);
+      keep_projection_planes_valid();
+
+      if (button_row(ctx, widths, "Reset Projection")) {
+        reset_projection_parameters();
+      }
+    }
 
     spacer_row(ctx, widths, 6);
     colored_label_row(ctx, widths, "Camera position:", CAMERA_COLOR);
@@ -944,7 +1062,8 @@ static void draw_camera_controls_window(mu_Context *ctx) {
     compact_axis_slider_row(ctx, "Y:", &g_camera.position.y,
                             CAMERA_POSITION_MIN, CAMERA_POSITION_MAX, "Reset PY");
     compact_axis_slider_row(ctx, "Z:", &g_camera.position.z,
-                            CAMERA_POSITION_MIN, CAMERA_POSITION_MAX, "Reset PZ");
+                            CAMERA_POSITION_MIN, CAMERA_POSITION_MAX, "Reset PZ",
+                            DEFAULT_CAMERA_DISTANCE);
 
     spacer_row(ctx, widths, 6);
     colored_label_row(ctx, widths, "Camera rotation:", CAMERA_COLOR);
@@ -1170,8 +1289,14 @@ static void draw_transformed_3d_line(const glm::vec3 &start,
                                      uint32_t color) {
   glm::vec3 transformed_start = apply_model_transform(start, model_matrix);
   glm::vec3 transformed_end = apply_model_transform(end, model_matrix);
-  ScreenPoint p0 = project_vertex_orthographic(transformed_start, g_viewport_transform);
-  ScreenPoint p1 = project_vertex_orthographic(transformed_end, g_viewport_transform);
+
+  ScreenPoint p0;
+  ScreenPoint p1;
+  if (!project_transformed_vertex(transformed_start, p0) ||
+      !project_transformed_vertex(transformed_end, p1)) {
+    return;
+  }
+
   draw_line(p0.x, p0.y, p1.x, p1.y, color);
 }
 

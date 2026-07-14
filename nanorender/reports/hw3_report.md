@@ -1,13 +1,13 @@
 # Assignment 3 Report: Virtual Cameras and Projections
 
-**Name:** Hala Ishan  
+**Name:** Hala Ishan
 **Student ID:** 213692296
 
 ---
 ## Shared Model Assets
 
-In Assignment 2, the OBJ test models were originally placed inside `nanorender/assets/hw2/models/` because they were created for that assignment.  
-When starting Assignment 3, I noticed that the same models would be reused in later parts and assignments, so I moved the reusable OBJ files to the shared folder `nanorender/assets/models/`.  
+In Assignment 2, the OBJ test models were originally placed inside `nanorender/assets/hw2/models/` because they were created for that assignment.
+When starting Assignment 3, I noticed that the same models would be reused in later parts and assignments, so I moved the reusable OBJ files to the shared folder `nanorender/assets/models/`.
 I also updated the renderer's `MESH_OPTIONS` list to load models from this shared folder.
 
 ## Part 1: Coordinate Frames and Bounding Boxes
@@ -15,11 +15,11 @@ I also updated the renderer's `MESH_OPTIONS` list to load models from this share
 For this part, I added two visual debugging helpers: coordinate axes and a 3D bounding box. Both can be enabled or disabled from the `Debug drawing` section.
 
 **1- Coordinate Axes:**
-I draw one fixed set of world axes from `(0, 0, 0)` and one local set from the mesh center.  
+I draw one fixed set of world axes from `(0, 0, 0)` and one local set from the mesh center.
 The axis colors are red for X, green for Y, and blue for Z.
 
 **2- Bounding Box:**
-I use the mesh minimum and maximum values to build the 8 bounding-box corners, then draw the 12 box edges as 3D lines.  
+I use the mesh minimum and maximum values to build the 8 bounding-box corners, then draw the 12 box edges as 3D lines.
 I used the pyramid for the visual test because its shape does not already match a box. With the regular cube, the bounding box overlaps the cube almost exactly, so the bounding-box helper is harder to see.
 
 ### The implementation can be seen in the UI and in the rendered scene:
@@ -103,5 +103,87 @@ To isolate the camera effect, I started both tests from the normal model positio
 </table>
 
 ---
+## Part 3: Perspective Projection
 
+### UI Preparation for Projection Work
 
+For this part, I added a projection mode toggle inside the Camera Controls panel. The renderer can now switch between `Orthographic` and `Perspective` mode.
+
+I kept Orthographic mode as the previous renderer behavior. Perspective mode has extra controls because it needs projection parameters:
+
+- `FOV / View zoom`
+- `Near`
+- `Far`
+- `Reset Projection`
+
+I used these controls for the Perspective tests. The FOV changes the view zoom, while Near and Far define the visible depth range of the perspective camera.
+
+<img src="../assets/hw3/images/hw3_part3_projection_controls.png" alt="Perspective projection controls" width="300">
+
+### Perspective Projection Implementation
+
+In Orthographic mode, the model keeps the same behavior from the previous parts: depth does not make the model bigger or smaller.
+
+In Perspective mode, I added a Projection Matrix after the Model Matrix and View Matrix. I used GLM's `glm::perspective` with the window aspect ratio `WIDTH / HEIGHT`. After multiplying by the projection matrix, I divide by `w` to get normalized device coordinates, then convert those coordinates to screen coordinates.
+
+The vertex pipeline becomes:
+
+`vertex -> Model Matrix -> View Matrix -> Projection Matrix -> perspective divide -> screen`
+
+This is the main difference between the two modes. Orthographic mode keeps the old direct screen mapping, while Perspective mode uses depth. Because of that, objects look bigger when they are closer to the camera and smaller when they are farther away.
+
+### Projection Tests
+
+I used the same pyramid model for the tests so the projection changes are easy to see. The first test switches between the two projection modes. The other tests stay in Perspective mode and check the projection controls one by one.
+
+#### Orthographic and Perspective Toggle
+
+<img src="../assets/hw3/gifs/hw3_part3_projection_toggle.gif" alt="Toggling between Orthographic and Perspective projection" width="600">
+
+I switched between Orthographic and Perspective mode with the same model and camera setup. Since only the projection mode changes, the GIF gives a direct comparison. Orthographic keeps the pyramid size almost constant, while Perspective changes the view based on depth.
+
+#### Perspective Depth and FOV
+
+<table>
+  <tr>
+    <th>Camera Position Z</th>
+    <th>Field of View</th>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw3/gifs/hw3_part3_camera_position_z.gif" alt="Changing camera position on Z in perspective mode" width="500"></td>
+    <td><img src="../assets/hw3/gifs/hw3_part3_fov_change.gif" alt="Changing the field of view in perspective mode" width="500"></td>
+  </tr>
+  <tr>
+    <td>
+      I moved the camera on the Z axis while staying in Perspective mode. When the camera gets closer to the pyramid, the pyramid looks bigger. When the camera moves farther away, the pyramid looks smaller. This shows the depth effect of the perspective projection.
+    </td>
+    <td>
+      I changed only the FOV value. A smaller FOV makes the view more zoomed in, so the pyramid looks bigger. A larger FOV makes the view wider and more zoomed out, so the pyramid looks smaller. In this test, the camera and model stay in the same place; only the projection setting changes.
+    </td>
+  </tr>
+</table>
+
+#### View Matrix Check and Clipping Range
+
+<table>
+  <tr>
+    <th>Camera Rotation Y</th>
+    <th>Near and Far Planes</th>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw3/gifs/hw3_part3_camera_rotation_y.gif" alt="Rotating the camera around Y in perspective mode" width="500"></td>
+    <td><img src="../assets/hw3/gifs/hw3_part3_near_far_clipping.gif" alt="Near and far clipping plane test in perspective mode" width="500"></td>
+  </tr>
+  <tr>
+    <td>
+      Part 2 already tested the View Matrix, so I used this only as a small extra check. I rotated the camera around Y and verified that the model is still projected correctly in Perspective mode. This shows that the old View Matrix logic still works together with the new Projection Matrix.
+    </td>
+    <td>
+      I changed the Near and Far plane values to test the visible depth range. These values do not zoom the pyramid. They decide what depth range the perspective camera can see. When part of the model is outside this range, it gets clipped and is not drawn.
+    </td>
+  </tr>
+</table>
+
+### Part 3 Summary
+
+This part adds Perspective projection without removing the old Orthographic renderer. The tests show that the projection toggle works, the perspective matrix uses depth, the FOV changes the zoomed-in or zoomed-out feeling, and the Near/Far values control the visible depth range. The extra camera rotation test also shows that the existing View Matrix still works correctly before the new Projection Matrix is applied.
