@@ -76,6 +76,13 @@ struct ScreenPoint {
   int y;
 };
 
+struct ScreenRect {
+  int min_x;
+  int min_y;
+  int max_x;
+  int max_y;
+};
+
 enum BackgroundMode {
   BACKGROUND_PLAIN,
   BACKGROUND_CIRCLES,
@@ -212,6 +219,9 @@ static int g_show_coordinate_axes = 0; // Draw world and local coordinate axes
 static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
 static int g_show_face_normals = 0;     // Draw one normal from each triangle center
 static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh vertices
+
+// Assignment 4 rasterization debug state
+static int g_show_triangle_bounding_boxes = 0; // Draw filled 2D triangle bounding rectangles
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -973,6 +983,7 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
   checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
+  checkbox_row(ctx, widths, "Show triangle boxes", &g_show_triangle_bounding_boxes);
 
   const char *keyboard_mode =
       g_keyboard_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
@@ -1334,6 +1345,88 @@ static void draw_transformed_3d_line(const glm::vec3 &start,
   glm::vec3 transformed_start = apply_model_transform(start, model_matrix);
   glm::vec3 transformed_end = apply_model_transform(end, model_matrix);
   draw_view_space_3d_line(transformed_start, transformed_end, color);
+}
+
+static uint32_t triangle_debug_color(size_t face_index) {
+  uint32_t value = (uint32_t)(face_index + 1) * 2654435761u;
+  uint8_t r = 80 + (uint8_t)(value & 0x7f);
+  uint8_t g = 80 + (uint8_t)((value >> 8) & 0x7f);
+  uint8_t b = 80 + (uint8_t)((value >> 16) & 0x7f);
+  return MFB_RGB(r, g, b);
+}
+
+static ScreenRect triangle_screen_bounds(const ScreenPoint &p0,
+                                         const ScreenPoint &p1,
+                                         const ScreenPoint &p2) {
+  ScreenRect rect;
+  rect.min_x = std::min(p0.x, std::min(p1.x, p2.x));
+  rect.min_y = std::min(p0.y, std::min(p1.y, p2.y));
+  rect.max_x = std::max(p0.x, std::max(p1.x, p2.x));
+  rect.max_y = std::max(p0.y, std::max(p1.y, p2.y));
+  return rect;
+}
+
+static bool clip_screen_rect(ScreenRect &rect) {
+  if (rect.max_x < 0 || rect.max_y < 0 ||
+      rect.min_x >= WIDTH || rect.min_y >= HEIGHT) {
+    return false;
+  }
+
+  rect.min_x = std::max(rect.min_x, 0);
+  rect.min_y = std::max(rect.min_y, 0);
+  rect.max_x = std::min(rect.max_x, WIDTH - 1);
+  rect.max_y = std::min(rect.max_y, HEIGHT - 1);
+  return rect.min_x <= rect.max_x && rect.min_y <= rect.max_y;
+}
+
+static void fill_screen_rect(const ScreenRect &rect, uint32_t color) {
+  for (int y = rect.min_y; y <= rect.max_y; y++) {
+    for (int x = rect.min_x; x <= rect.max_x; x++) {
+      draw_pixel(x, y, color);
+    }
+  }
+}
+
+static bool project_face_to_screen(const Face &face,
+                                   const glm::mat4 &model_view_matrix,
+                                   ScreenPoint &p0,
+                                   ScreenPoint &p1,
+                                   ScreenPoint &p2) {
+  glm::vec3 v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
+                                       model_view_matrix);
+  glm::vec3 v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
+                                       model_view_matrix);
+  glm::vec3 v2 = apply_model_transform(g_loaded_mesh.vertices[face.v2],
+                                       model_view_matrix);
+
+  return project_transformed_vertex(v0, p0) &&
+         project_transformed_vertex(v1, p1) &&
+         project_transformed_vertex(v2, p2);
+}
+
+static void draw_triangle_bounding_boxes() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid) {
+    return;
+  }
+
+  glm::mat4 model_view_matrix = build_model_view_matrix(build_model_matrix());
+
+  for (size_t i = 0; i < g_loaded_mesh.faces.size(); i++) {
+    ScreenPoint p0;
+    ScreenPoint p1;
+    ScreenPoint p2;
+    if (!project_face_to_screen(g_loaded_mesh.faces[i], model_view_matrix,
+                                p0, p1, p2)) {
+      continue;
+    }
+
+    ScreenRect rect = triangle_screen_bounds(p0, p1, p2);
+    if (!clip_screen_rect(rect)) {
+      continue;
+    }
+
+    fill_screen_rect(rect, triangle_debug_color(i));
+  }
 }
 
 static void draw_mesh_wireframe() {
@@ -1794,7 +1887,11 @@ int main() {
     }
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
-    draw_mesh_wireframe();
+    if (g_show_triangle_bounding_boxes) {
+      draw_triangle_bounding_boxes();
+    } else {
+      draw_mesh_wireframe();
+    }
     draw_bounding_box();
     draw_coordinate_axes();
     draw_face_normals();
