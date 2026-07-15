@@ -147,3 +147,52 @@ I recorded the same rotation twice: once as wireframe and once with filled trian
 </table>
 
 This comparison makes the change from wireframe edges to filled faces clear. Some faces can still overlap incorrectly because there is no Z-buffer yet. The triangles are drawn in mesh order, so a farther triangle can appear on top of a closer one. This will be fixed in the next part.
+
+---
+## Part 3: The Z-Buffer Algorithm
+
+Here, I implemented the Z-buffer algorithm required by the assignment.
+
+I added a `float` Z-buffer with the same size as `g_buffer`, and I clear it at the start of every frame using a very large value.
+
+While filling each triangle, I use the barycentric weights to calculate the depth of each pixel:
+
+`depth = alpha * Z0 + beta * Z1 + gamma * Z2`
+
+Then I compare this depth with the current value in the Z-buffer:
+
+- If the new pixel is closer, I update both `g_buffer` and the Z-buffer.
+- If the new pixel is farther away, I skip it.
+
+This makes the visibility decision happen per pixel instead of depending only on triangle order.
+
+I also added `Show depth map` to display the Z-buffer values. In this mode, closer pixels are darker, farther pixels are lighter, and the background is white because no model pixel wrote a depth value there.
+
+The filled color view and the depth map view are separate. Turning on one of them turns the other one off, so I can check the two results separately.
+
+<img src="../assets/hw4/images/hw4_part3_depth_map_toggle.png" alt="Show depth map UI toggle" width="360">
+
+### Z-Buffer Results
+
+For the examples, I used the same movement in both videos. The model rotates on Y, then X, then Z. This way, the comparison is clear because the movement is the same, but the displayed buffer is different.
+
+<table>
+  <tr>
+    <th>Z-Buffer / Depth Map</th>
+    <th>Color Buffer</th>
+  </tr>
+  <tr>
+    <td><img src="../assets/hw4/gifs/hw4_part3_z_buffer_rotation.gif" alt="Z-buffer depth map visualization" width="500"></td>
+    <td><img src="../assets/hw4/gifs/hw4_part3_color_buffer_rotation.gif" alt="Color buffer result with filled triangles" width="500"></td>
+  </tr>
+  <tr>
+    <td>
+      This shows the same rotation using the Z-buffer visualization. The closer parts are darker, and the farther parts are lighter.
+    </td>
+    <td>
+      This shows the normal color result after the Z-buffer depth test. At the start of the GIF, I switch to `Show filled triangles`, and the depth map mode turns off automatically.
+    </td>
+  </tr>
+</table>
+
+The two examples show that the renderer now uses depth when drawing filled triangles. The color buffer shows the final visible result, and the depth map shows the depth values behind that result.

@@ -83,6 +83,11 @@ struct ScreenRect {
   int max_y;
 };
 
+struct RasterVertex {
+  ScreenPoint screen;
+  float depth;
+};
+
 struct BarycentricWeights {
   float alpha;
   float beta;
@@ -182,6 +187,7 @@ static const uint32_t VERTEX_NORMAL_COLOR = MFB_RGB(80, 255, 230); // Cyan verte
 
 // Framebuffer state
 static uint32_t g_buffer[WIDTH * HEIGHT];
+static float g_z_buffer[WIDTH * HEIGHT];
 
 // Background state controlled by UI widgets
 static BackgroundMode g_background_mode = BACKGROUND_PLAIN;
@@ -228,6 +234,7 @@ static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh verti
 
 // Assignment 4 rasterization debug state
 static int g_show_filled_triangles = 0; // Draw solid triangles with barycentric rasterization
+static int g_show_depth_map = 0;        // Show the Z-buffer as a grayscale depth map
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -989,7 +996,16 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
   checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
+  int filled_triangles_was_on = g_show_filled_triangles;
+  int depth_map_was_on = g_show_depth_map;
   checkbox_row(ctx, widths, "Show filled triangles", &g_show_filled_triangles);
+  if (!filled_triangles_was_on && g_show_filled_triangles) {
+    g_show_depth_map = 0;
+  }
+  checkbox_row(ctx, widths, "Show depth map", &g_show_depth_map);
+  if (!depth_map_was_on && g_show_depth_map) {
+    g_show_filled_triangles = 0;
+  }
 
   const char *keyboard_mode =
       g_keyboard_transform_space == TRANSFORM_LOCAL ? "Local" : "World";
@@ -1225,6 +1241,62 @@ static void draw_pixel(int x, int y, uint32_t color) {
   g_buffer[y * WIDTH + x] = color;
 }
 
+static const float Z_BUFFER_INFINITY = 1.0e30f;
+
+static void clear_z_buffer() {
+  for (int i = 0; i < WIDTH * HEIGHT; i++) {
+    g_z_buffer[i] = Z_BUFFER_INFINITY;
+  }
+}
+
+static bool depth_test_and_write(int x, int y, float depth) {
+  if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+    return false;
+  }
+
+  int index = y * WIDTH + x;
+  if (depth < g_z_buffer[index]) {
+    g_z_buffer[index] = depth;
+    return true;
+  }
+
+  return false;
+}
+
+static void draw_depth_map() {
+  float nearest = Z_BUFFER_INFINITY;
+  float farthest = 0.0f;
+
+  for (int i = 0; i < WIDTH * HEIGHT; i++) {
+    float depth = g_z_buffer[i];
+    if (depth < Z_BUFFER_INFINITY) {
+      nearest = std::min(nearest, depth);
+      farthest = std::max(farthest, depth);
+    }
+  }
+
+  if (nearest == Z_BUFFER_INFINITY) {
+    return;
+  }
+
+  float range = farthest - nearest;
+  if (range < 0.0001f) {
+    range = 1.0f;
+  }
+
+  for (int i = 0; i < WIDTH * HEIGHT; i++) {
+    float depth = g_z_buffer[i];
+    uint8_t gray = 255;
+
+    if (depth < Z_BUFFER_INFINITY) {
+      float normalized = (depth - nearest) / range;
+      normalized = std::max(0.0f, std::min(1.0f, normalized));
+      gray = (uint8_t)std::lround(normalized * 255.0f);
+    }
+
+    g_buffer[i] = MFB_RGB(gray, gray, gray);
+  }
+}
 static void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
   int dx = abs(x1 - x0);
   int sx = x0 < x1 ? 1 : -1;
@@ -1361,14 +1433,14 @@ static uint32_t triangle_debug_color(size_t face_index) {
   return MFB_RGB(r, g, b);
 }
 
-static ScreenRect triangle_screen_bounds(const ScreenPoint &p0,
-                                         const ScreenPoint &p1,
-                                         const ScreenPoint &p2) {
+static ScreenRect triangle_screen_bounds(const RasterVertex &v0,
+                                         const RasterVertex &v1,
+                                         const RasterVertex &v2) {
   ScreenRect rect;
-  rect.min_x = std::min(p0.x, std::min(p1.x, p2.x));
-  rect.min_y = std::min(p0.y, std::min(p1.y, p2.y));
-  rect.max_x = std::max(p0.x, std::max(p1.x, p2.x));
-  rect.max_y = std::max(p0.y, std::max(p1.y, p2.y));
+  rect.min_x = std::min(v0.screen.x, std::min(v1.screen.x, v2.screen.x));
+  rect.min_y = std::min(v0.screen.y, std::min(v1.screen.y, v2.screen.y));
+  rect.max_x = std::max(v0.screen.x, std::max(v1.screen.x, v2.screen.x));
+  rect.max_y = std::max(v0.screen.y, std::max(v1.screen.y, v2.screen.y));
   return rect;
 }
 
@@ -1411,38 +1483,65 @@ static bool is_inside_triangle(const BarycentricWeights &weights) {
          weights.gamma >= 0.0f && weights.gamma <= 1.0f;
 }
 
+static float interpolate_depth(const BarycentricWeights &weights,
+                               const RasterVertex &v0,
+                               const RasterVertex &v1,
+                               const RasterVertex &v2) {
+  return weights.alpha * v0.depth +
+         weights.beta * v1.depth +
+         weights.gamma * v2.depth;
+}
+
 static void fill_triangle_in_bounds(const ScreenRect &rect,
-                                    const ScreenPoint &p0,
-                                    const ScreenPoint &p1,
-                                    const ScreenPoint &p2,
+                                    const RasterVertex &v0,
+                                    const RasterVertex &v1,
+                                    const RasterVertex &v2,
                                     uint32_t color) {
   for (int y = rect.min_y; y <= rect.max_y; y++) {
     for (int x = rect.min_x; x <= rect.max_x; x++) {
       BarycentricWeights weights = barycentric_coordinates((float)x + 0.5f,
                                                            (float)y + 0.5f,
-                                                           p0, p1, p2);
-      if (is_inside_triangle(weights)) {
+                                                           v0.screen,
+                                                           v1.screen,
+                                                           v2.screen);
+      if (!is_inside_triangle(weights)) {
+        continue;
+      }
+
+      float depth = interpolate_depth(weights, v0, v1, v2);
+      if (depth_test_and_write(x, y, depth)) {
         draw_pixel(x, y, color);
       }
     }
   }
 }
 
+static float view_depth(const glm::vec3 &view_vertex) {
+  return std::abs(view_vertex.z);
+}
+
 static bool project_face_to_screen(const Face &face,
                                    const glm::mat4 &model_view_matrix,
-                                   ScreenPoint &p0,
-                                   ScreenPoint &p1,
-                                   ScreenPoint &p2) {
-  glm::vec3 v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
-                                       model_view_matrix);
-  glm::vec3 v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
-                                       model_view_matrix);
-  glm::vec3 v2 = apply_model_transform(g_loaded_mesh.vertices[face.v2],
-                                       model_view_matrix);
+                                   RasterVertex &v0,
+                                   RasterVertex &v1,
+                                   RasterVertex &v2) {
+  glm::vec3 view_v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
+                                            model_view_matrix);
+  glm::vec3 view_v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
+                                            model_view_matrix);
+  glm::vec3 view_v2 = apply_model_transform(g_loaded_mesh.vertices[face.v2],
+                                            model_view_matrix);
 
-  return project_transformed_vertex(v0, p0) &&
-         project_transformed_vertex(v1, p1) &&
-         project_transformed_vertex(v2, p2);
+  if (!project_transformed_vertex(view_v0, v0.screen) ||
+      !project_transformed_vertex(view_v1, v1.screen) ||
+      !project_transformed_vertex(view_v2, v2.screen)) {
+    return false;
+  }
+
+  v0.depth = view_depth(view_v0);
+  v1.depth = view_depth(view_v1);
+  v2.depth = view_depth(view_v2);
+  return true;
 }
 
 static void draw_filled_triangles() {
@@ -1453,20 +1552,20 @@ static void draw_filled_triangles() {
   glm::mat4 model_view_matrix = build_model_view_matrix(build_model_matrix());
 
   for (size_t i = 0; i < g_loaded_mesh.faces.size(); i++) {
-    ScreenPoint p0;
-    ScreenPoint p1;
-    ScreenPoint p2;
+    RasterVertex v0;
+    RasterVertex v1;
+    RasterVertex v2;
     if (!project_face_to_screen(g_loaded_mesh.faces[i], model_view_matrix,
-                                p0, p1, p2)) {
+                                v0, v1, v2)) {
       continue;
     }
 
-    ScreenRect rect = triangle_screen_bounds(p0, p1, p2);
+    ScreenRect rect = triangle_screen_bounds(v0, v1, v2);
     if (!clip_screen_rect(rect)) {
       continue;
     }
 
-    fill_triangle_in_bounds(rect, p0, p1, p2, triangle_debug_color(i));
+    fill_triangle_in_bounds(rect, v0, v1, v2, triangle_debug_color(i));
   }
 }
 
@@ -1895,6 +1994,7 @@ int main() {
 
     // 2. Scene Rendering
     render_background();
+    clear_z_buffer();
 
     // 3. UI Logic
     static bool quit_requested = false;
@@ -1928,8 +2028,11 @@ int main() {
     }
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
-    if (g_show_filled_triangles) {
+    if (g_show_filled_triangles || g_show_depth_map) {
       draw_filled_triangles();
+      if (g_show_depth_map) {
+        draw_depth_map();
+      }
     } else {
       draw_mesh_wireframe();
     }
