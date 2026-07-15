@@ -196,3 +196,9 @@ For the examples, I used the same movement in both videos. The model rotates on 
 </table>
 
 The two examples show that the renderer now uses depth when drawing filled triangles. The color buffer shows the final visible result, and the depth map shows the depth values behind that result.
+
+## Final Note
+
+In this assignment, I moved the renderer from wireframe drawing to solid triangle rasterization. I started with triangle bounding boxes, then filled the triangles using barycentric coordinates, and finally added the Z-buffer for per-pixel depth. Since I worked on this assignment alone, I completed Parts 1-3 and did not do the pair programming extensions in Part 4.
+
+I enjoyed this assignment, it was short and clear, but each part made a visible difference in the renderer. It was nice to see the model change step by step from wireframe lines, to filled triangles, and then to a solid object with correct depth.
