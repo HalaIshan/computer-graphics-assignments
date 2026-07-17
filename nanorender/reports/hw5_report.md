@@ -166,3 +166,18 @@ In this example, I kept the material color from the previous example and changed
 
 
 **Together, these examples show the ambient equation from both sides. Changing the material changes what color the object reflects, while changing the light changes how strongly each material color channel appears. The model stays flat because diffuse and specular lighting are not implemented yet.**
+
+---
+
+## Render Mode Organization
+
+After Part 1, I organized the main drawing options into one `Render mode` selector.
+
+Before this change, the renderer already made sure that only one main render view could be active at a time, which was correct. But after adding more views, the separate options became less clear. The selector keeps the same behavior in a cleaner way because I choose one main result at a time: `Wireframe`, `Filled triangles`, `Depth map`, or `Ambient lighting`.
+
+The debug drawings, such as axes, bounding box, and normals, stayed as checkboxes because they are overlays that can appear on top of the selected render mode.
+
+The image and GIF show the new selector and how it switches between the render modes one at a time.
+
+<img src="../assets/hw5/images/hw5_render_mode_selector.png" alt="Render mode selector" width="450">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/gifs/hw5_render_mode_selector.gif" alt="Changing render modes" width="580">
+

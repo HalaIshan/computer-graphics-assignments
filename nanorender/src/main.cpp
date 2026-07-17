@@ -129,6 +129,13 @@ enum ProjectionMode {
   PROJECTION_PERSPECTIVE
 };
 
+enum RenderMode {
+  RENDER_WIREFRAME,
+  RENDER_FILLED_TRIANGLES,
+  RENDER_DEPTH_MAP,
+  RENDER_AMBIENT_LIGHTING
+};
+
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *CAMERA_CONTROLS_TITLE = "Camera Controls";         // Camera setup panel
@@ -150,6 +157,12 @@ static const int MODEL_SEARCH_PATH_COUNT = sizeof(MODEL_SEARCH_PATHS) / sizeof(M
 static const int MESH_OPTION_COUNT = sizeof(MESH_OPTIONS) / sizeof(MESH_OPTIONS[0]);
 static const int DEFAULT_MESH_INDEX = 0; // Start with the pyramid for camera tests
 
+static const char *RENDER_MODE_NAMES[] = {
+    "Wireframe",
+    "Filled triangles",
+    "Depth map",
+    "Ambient lighting"};
+static const int RENDER_MODE_COUNT = sizeof(RENDER_MODE_NAMES) / sizeof(RENDER_MODE_NAMES[0]);
 static const float TRANSLATION_MIN = -2.0f;
 static const float TRANSLATION_MAX = 2.0f;
 static const float ROTATION_MIN = -180.0f;
@@ -235,6 +248,7 @@ static char g_mesh_path_used[256] = "";                 // Path that successfull
 static ViewportTransform g_viewport_transform = {};
 static int g_selected_mesh_index = DEFAULT_MESH_INDEX;
 static bool g_mesh_selector_open = false;
+static bool g_render_mode_selector_open = false;
 
 // Part 4 transformation state
 static TransformParameters g_local_transform = {
@@ -266,10 +280,8 @@ static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
 static int g_show_face_normals = 0;     // Draw one normal from each triangle center
 static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh vertices
 
-// Assignment 4 rasterization debug state
-static int g_show_filled_triangles = 0; // Draw solid triangles with barycentric rasterization
-static int g_show_depth_map = 0;        // Show the Z-buffer as a grayscale depth map
-static int g_show_ambient_lighting = 0; // Draw the HW5 ambient lighting result
+// Main render mode state
+static RenderMode g_render_mode = RENDER_WIREFRAME;
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -1106,23 +1118,29 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
   checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
-  int filled_triangles_was_on = g_show_filled_triangles;
-  int depth_map_was_on = g_show_depth_map;
-  int ambient_lighting_was_on = g_show_ambient_lighting;
-  checkbox_row(ctx, widths, "Show filled triangles", &g_show_filled_triangles);
-  if (!filled_triangles_was_on && g_show_filled_triangles) {
-    g_show_depth_map = 0;
-    g_show_ambient_lighting = 0;
+
+  spacer_row(ctx, widths, 8);
+  colored_label_row(ctx, widths, "Render mode:", DEBUG_COLOR);
+  char render_mode_text[128];
+  snprintf(render_mode_text, sizeof(render_mode_text),
+           "Mode: %s", RENDER_MODE_NAMES[(int)g_render_mode]);
+  if (button_row(ctx, widths, render_mode_text)) {
+    g_render_mode_selector_open = !g_render_mode_selector_open;
   }
-  checkbox_row(ctx, widths, "Show depth map", &g_show_depth_map);
-  if (!depth_map_was_on && g_show_depth_map) {
-    g_show_filled_triangles = 0;
-    g_show_ambient_lighting = 0;
-  }
-  checkbox_row(ctx, widths, "Show ambient lighting", &g_show_ambient_lighting);
-  if (!ambient_lighting_was_on && g_show_ambient_lighting) {
-    g_show_filled_triangles = 0;
-    g_show_depth_map = 0;
+
+  if (g_render_mode_selector_open) {
+    for (int i = 0; i < RENDER_MODE_COUNT; i++) {
+      char option_text[128];
+      snprintf(option_text, sizeof(option_text),
+               "%s%s",
+               i == (int)g_render_mode ? "> " : "  ",
+               RENDER_MODE_NAMES[i]);
+
+      if (button_row(ctx, widths, option_text)) {
+        g_render_mode = (RenderMode)i;
+        g_render_mode_selector_open = false;
+      }
+    }
   }
 
   const char *keyboard_mode =
@@ -2211,15 +2229,21 @@ int main() {
     }
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
-    if (g_show_ambient_lighting) {
-      draw_ambient_lighting();
-    } else if (g_show_filled_triangles || g_show_depth_map) {
+    switch (g_render_mode) {
+    case RENDER_FILLED_TRIANGLES:
       draw_filled_triangles();
-      if (g_show_depth_map) {
-        draw_depth_map();
-      }
-    } else {
+      break;
+    case RENDER_DEPTH_MAP:
+      draw_filled_triangles();
+      draw_depth_map();
+      break;
+    case RENDER_AMBIENT_LIGHTING:
+      draw_ambient_lighting();
+      break;
+    case RENDER_WIREFRAME:
+    default:
       draw_mesh_wireframe();
+      break;
     }
     draw_bounding_box();
     draw_coordinate_axes();
