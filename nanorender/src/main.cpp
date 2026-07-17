@@ -71,6 +71,19 @@ struct CameraParameters {
   glm::vec3 rotation_degrees;
 };
 
+struct PointLight {
+  glm::vec3 position; // light position in world space
+  glm::vec3 ambient;  // ambient light color/intensity
+  glm::vec3 diffuse;  // diffuse light color for later parts
+  glm::vec3 specular; // specular light color for later parts
+};
+
+struct Material {
+  glm::vec3 ambient;  // material color reflected by ambient light
+  glm::vec3 diffuse;  // material diffuse color for later parts
+  glm::vec3 specular; // material specular color for later parts
+};
+
 struct ScreenPoint {
   int x;
   int y;
@@ -119,6 +132,7 @@ enum ProjectionMode {
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
 static const char *CANVAS_WINDOW_TITLE = "Creative Canvas";           // Drawing tools panel
 static const char *CAMERA_CONTROLS_TITLE = "Camera Controls";         // Camera setup panel
+static const char *LIGHTING_CONTROLS_TITLE = "Light and Material";       // Light and material panel
 static const char *WINDOW_CONTROLS_TITLE = "Window Controls";         // Reset/show buttons panel
 static const char *MESH_DETAILS_WINDOW_TITLE = "Mesh Details";       // Optional mesh debug info
 
@@ -162,10 +176,15 @@ static const float NEAR_PLANE_MIN = 0.1f;
 static const float NEAR_PLANE_MAX = 5.0f;
 static const float FAR_PLANE_MIN = 2.0f;
 static const float FAR_PLANE_MAX = 50.0f;
+static const float LIGHT_POSITION_MIN = -5.0f;
+static const float LIGHT_POSITION_MAX = 5.0f;
+static const float COLOR_INTENSITY_MIN = 0.0f;
+static const float COLOR_INTENSITY_MAX = 1.0f;
 
-static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 800};             // Left scene controls
-static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 220};   // Upper right
+static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 860};             // Left scene controls
+static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 250};   // Upper right
 static const mu_Rect DEFAULT_CAMERA_CONTROLS_RECT = {1220, 270, 360, 600};  // Camera setup panel
+static const mu_Rect DEFAULT_LIGHTING_CONTROLS_RECT = {1220, 270, 360, 620}; // Light/material panel
 static const mu_Rect DEFAULT_CANVAS_RECT = {520, 260, 640, 360};             // Hidden drawing tools panel
 static const mu_Rect DEFAULT_MESH_DETAILS_RECT = {500, 20, 420, 230};       // Hidden until requested
 
@@ -177,6 +196,7 @@ static const mu_Color LINE_TOOLS_COLOR = {255, 180, 120, 255};       // Soft ora
 static const mu_Color CAMERA_COLOR = {170, 230, 255, 255};           // Light cyan
 static const mu_Color WINDOW_CONTROLS_COLOR = {220, 220, 255, 255};  // Pale blue
 static const mu_Color DEBUG_COLOR = {130, 230, 255, 255};            // Cyan debug controls
+static const mu_Color LIGHTING_COLOR = {255, 235, 150, 255};         // Warm lighting controls
 
 static const uint32_t AXIS_X_COLOR = MFB_RGB(255, 70, 70);    // Red X axis
 static const uint32_t AXIS_Y_COLOR = MFB_RGB(80, 230, 80);    // Green Y axis
@@ -184,6 +204,16 @@ static const uint32_t AXIS_Z_COLOR = MFB_RGB(90, 140, 255);   // Blue Z axis
 static const uint32_t BOUNDING_BOX_COLOR = MFB_RGB(255, 225, 90); // Yellow box edges
 static const uint32_t FACE_NORMAL_COLOR = MFB_RGB(255, 120, 220);  // Pink face normals
 static const uint32_t VERTEX_NORMAL_COLOR = MFB_RGB(80, 255, 230); // Cyan vertex normals
+
+static const PointLight DEFAULT_POINT_LIGHT = {
+    glm::vec3(1.5f, 1.5f, 2.0f),
+    glm::vec3(1.0f, 1.0f, 1.0f),
+    glm::vec3(1.0f, 1.0f, 1.0f),
+    glm::vec3(1.0f, 1.0f, 1.0f)};
+static const Material DEFAULT_MATERIAL = {
+    glm::vec3(0.25f, 0.55f, 0.9f),
+    glm::vec3(0.25f, 0.55f, 0.9f),
+    glm::vec3(1.0f, 1.0f, 1.0f)};
 
 // Framebuffer state
 static uint32_t g_buffer[WIDTH * HEIGHT];
@@ -226,6 +256,10 @@ static float g_projection_fov_degrees = DEFAULT_FOV_DEGREES;
 static float g_projection_near_plane = DEFAULT_NEAR_PLANE;
 static float g_projection_far_plane = DEFAULT_FAR_PLANE;
 
+// Assignment 5 lighting state
+static PointLight g_point_light = DEFAULT_POINT_LIGHT;
+static Material g_material = DEFAULT_MATERIAL;
+
 // Assignment 3 visual debugging state
 static int g_show_coordinate_axes = 0; // Draw world and local coordinate axes
 static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
@@ -235,6 +269,7 @@ static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh verti
 // Assignment 4 rasterization debug state
 static int g_show_filled_triangles = 0; // Draw solid triangles with barycentric rasterization
 static int g_show_depth_map = 0;        // Show the Z-buffer as a grayscale depth map
+static int g_show_ambient_lighting = 0; // Draw the HW5 ambient lighting result
 
 // Line drawing state
 static std::vector<DrawnLine> g_drawn_lines;
@@ -262,12 +297,15 @@ static mu_Color ui_current_line_color() {
 static mu_Rect g_widgets_window_rect = DEFAULT_WIDGETS_RECT;
 static mu_Rect g_canvas_window_rect = DEFAULT_CANVAS_RECT;
 static mu_Rect g_camera_controls_window_rect = DEFAULT_CAMERA_CONTROLS_RECT;
+static mu_Rect g_lighting_controls_window_rect = DEFAULT_LIGHTING_CONTROLS_RECT;
 static mu_Rect g_window_controls_rect = DEFAULT_WINDOW_CONTROLS_RECT;
 static mu_Rect g_mesh_details_window_rect = DEFAULT_MESH_DETAILS_RECT;
 
 static bool g_widgets_window_open = true;
 static bool g_canvas_window_open = false;
-static bool g_camera_controls_window_open = true;
+static bool g_camera_controls_window_open = false;
+static bool g_show_camera_controls_window = false;
+static bool g_lighting_controls_window_open = true;
 static bool g_window_controls_open = true;
 static bool g_show_canvas_window = false;
 static bool g_mesh_details_window_open = false;
@@ -348,7 +386,6 @@ static bool is_mouse_over_ui_window(int x, int y) {
       point_inside_rect(x, y, g_widgets_window_rect)) {
     return true;
   }
-
 
   if (g_show_canvas_window && g_canvas_window_open &&
       point_inside_rect(x, y, g_canvas_window_rect)) {
@@ -543,13 +580,90 @@ static void reset_projection_parameters() {
   g_projection_far_plane = DEFAULT_FAR_PLANE;
 }
 
+static void reset_light_position() {
+  g_point_light.position = DEFAULT_POINT_LIGHT.position;
+}
+
+static void reset_light_ambient() {
+  g_point_light.ambient = DEFAULT_POINT_LIGHT.ambient;
+}
+
+static void reset_material_ambient() {
+  g_material.ambient = DEFAULT_MATERIAL.ambient;
+}
+
+static float clamp_color_value(float value) {
+  return std::max(0.0f, std::min(1.0f, value));
+}
+
+static uint8_t color_float_to_byte(float value) {
+  return (uint8_t)std::lround(clamp_color_value(value) * 255.0f);
+}
+
+static uint32_t rgb_float_color(const glm::vec3 &color) {
+  return MFB_RGB(color_float_to_byte(color.r),
+                 color_float_to_byte(color.g),
+                 color_float_to_byte(color.b));
+}
+
+static glm::vec3 ambient_lighting_color() {
+  return glm::vec3(g_point_light.ambient.r * g_material.ambient.r,
+                   g_point_light.ambient.g * g_material.ambient.g,
+                   g_point_light.ambient.b * g_material.ambient.b);
+}
+
+static uint32_t ambient_lighting_debug_color() {
+  return rgb_float_color(ambient_lighting_color());
+}
+
+static void compact_value_slider_row(mu_Context *ctx, const char *label,
+                                     float *value, float low, float high) {
+  int widths[] = {24, 230, 60};
+  char value_text[32];
+  snprintf(value_text, sizeof(value_text), "%.2f", *value);
+
+  mu_layout_row(ctx, 3, widths, 0);
+  mu_label(ctx, label);
+  mu_slider(ctx, value, low, high);
+  mu_label(ctx, value_text);
+}
+
+static void light_position_sliders(mu_Context *ctx, int *widths) {
+  colored_label_row(ctx, widths, "Light position:", LIGHTING_COLOR);
+  compact_value_slider_row(ctx, "X:", &g_point_light.position.x,
+                           LIGHT_POSITION_MIN, LIGHT_POSITION_MAX);
+  compact_value_slider_row(ctx, "Y:", &g_point_light.position.y,
+                           LIGHT_POSITION_MIN, LIGHT_POSITION_MAX);
+  compact_value_slider_row(ctx, "Z:", &g_point_light.position.z,
+                           LIGHT_POSITION_MIN, LIGHT_POSITION_MAX);
+}
+
+static void color_group_sliders(mu_Context *ctx, int *widths,
+                                const char *title, glm::vec3 *color) {
+  colored_label_row(ctx, widths, title, LIGHTING_COLOR);
+  compact_value_slider_row(ctx, "R:", &color->r,
+                           COLOR_INTENSITY_MIN, COLOR_INTENSITY_MAX);
+  compact_value_slider_row(ctx, "G:", &color->g,
+                           COLOR_INTENSITY_MIN, COLOR_INTENSITY_MAX);
+  compact_value_slider_row(ctx, "B:", &color->b,
+                           COLOR_INTENSITY_MIN, COLOR_INTENSITY_MAX);
+}
+
+static bool compact_button(mu_Context *ctx, const char *label) {
+  int widths[] = {55, 220, 55};
+  mu_layout_row(ctx, 3, widths, 0);
+  mu_label(ctx, "");
+  bool clicked = mu_button(ctx, label);
+  mu_label(ctx, "");
+  return clicked;
+}
+
 static bool load_mesh_option(int option_index);
 
 static void draw_keyboard_controls(mu_Context *ctx, int *widths) {
   mu_Color keyboard_color = KEYBOARD_COLOR;
   colored_label_row(ctx, widths, "Keyboard controls:", keyboard_color);
-  colored_label_row(ctx, widths, "P: change background", keyboard_color);
-  colored_label_row(ctx, widths, "Cycle: Plain > Circles > Checker", keyboard_color);
+  colored_label_row(ctx, widths, "P: background Plain > Circles > Checker", keyboard_color);
   colored_label_row(ctx, widths, "I: invert background colors", keyboard_color);
 }
 
@@ -832,11 +946,11 @@ static glm::vec3 &selected_transform_values() {
 
 static void draw_mesh_controls(mu_Context *ctx, int *widths) {
   mu_Color mesh_color = MESH_COLOR;
-  colored_label_row(ctx, widths, "Mesh:", mesh_color);
+  colored_label_row(ctx, widths, "Model and transforms:", mesh_color);
 
   char selector_text[128];
   snprintf(selector_text, sizeof(selector_text),
-           "Model: %s", MESH_OPTIONS[g_selected_mesh_index].name);
+           "Choose model: %s", MESH_OPTIONS[g_selected_mesh_index].name);
 
   if (button_row(ctx, widths, selector_text)) {
     g_mesh_selector_open = !g_mesh_selector_open;
@@ -856,8 +970,6 @@ static void draw_mesh_controls(mu_Context *ctx, int *widths) {
       }
     }
   }
-
-  label_row(ctx, widths, "Use Show Mesh Details for loading and viewport values.");
 }
 
 static void draw_mesh_details_window(mu_Context *ctx) {
@@ -929,15 +1041,13 @@ static void draw_mesh_details_window(mu_Context *ctx) {
 }
 
 static void draw_transform_controls(mu_Context *ctx, int *widths) {
-  colored_label_row(ctx, widths, "Transform controls:", TRANSFORM_COLOR);
-
   int space_widths[] = {210, 210};
   mu_layout_row(ctx, 2, space_widths, 0);
-  if (mu_button(ctx, g_transform_space == TRANSFORM_LOCAL ? "> Local" : "Local")) {
-    g_transform_space = TRANSFORM_LOCAL;
-  }
   if (mu_button(ctx, g_transform_space == TRANSFORM_WORLD ? "> World" : "World")) {
     g_transform_space = TRANSFORM_WORLD;
+  }
+  if (mu_button(ctx, g_transform_space == TRANSFORM_LOCAL ? "> Local" : "Local")) {
+    g_transform_space = TRANSFORM_LOCAL;
   }
 
   int operation_widths[] = {134, 134, 134};
@@ -998,13 +1108,21 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
   int filled_triangles_was_on = g_show_filled_triangles;
   int depth_map_was_on = g_show_depth_map;
+  int ambient_lighting_was_on = g_show_ambient_lighting;
   checkbox_row(ctx, widths, "Show filled triangles", &g_show_filled_triangles);
   if (!filled_triangles_was_on && g_show_filled_triangles) {
     g_show_depth_map = 0;
+    g_show_ambient_lighting = 0;
   }
   checkbox_row(ctx, widths, "Show depth map", &g_show_depth_map);
   if (!depth_map_was_on && g_show_depth_map) {
     g_show_filled_triangles = 0;
+    g_show_ambient_lighting = 0;
+  }
+  checkbox_row(ctx, widths, "Show ambient lighting", &g_show_ambient_lighting);
+  if (!ambient_lighting_was_on && g_show_ambient_lighting) {
+    g_show_filled_triangles = 0;
+    g_show_depth_map = 0;
   }
 
   const char *keyboard_mode =
@@ -1034,7 +1152,6 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
     spacer_row(ctx, widths, 8);
     draw_mesh_controls(ctx, widths);
 
-    spacer_row(ctx, widths, 8);
     draw_transform_controls(ctx, widths);
 
     if (button_row(ctx, widths, "Quit")) {
@@ -1044,7 +1161,6 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
     mu_end_window(ctx);
   }
 }
-
 
 static void draw_creative_canvas_window(mu_Context *ctx) {
   if (!g_show_canvas_window) {
@@ -1087,6 +1203,10 @@ static void draw_creative_canvas_window(mu_Context *ctx) {
 }
 
 static void draw_camera_controls_window(mu_Context *ctx) {
+  if (!g_show_camera_controls_window) {
+    return;
+  }
+
   if (mu_begin_window(ctx, CAMERA_CONTROLS_TITLE, DEFAULT_CAMERA_CONTROLS_RECT)) {
     int widths[] = {-1};
 
@@ -1143,6 +1263,38 @@ static void draw_camera_controls_window(mu_Context *ctx) {
     }
 
     mu_end_window(ctx);
+  } else {
+    g_camera_controls_window_open = false;
+    g_show_camera_controls_window = false;
+  }
+}
+
+static void draw_lighting_controls_window(mu_Context *ctx) {
+  if (mu_begin_window(ctx, LIGHTING_CONTROLS_TITLE, DEFAULT_LIGHTING_CONTROLS_RECT)) {
+    int widths[] = {-1};
+
+    colored_label_row(ctx, widths, "Light controls:", LIGHTING_COLOR);
+    light_position_sliders(ctx, widths);
+    if (compact_button(ctx, "Reset Light Position")) {
+      reset_light_position();
+    }
+
+    spacer_row(ctx, widths, 6);
+    color_group_sliders(ctx, widths, "Light ambient:", &g_point_light.ambient);
+    if (compact_button(ctx, "Reset Light Ambient")) {
+      reset_light_ambient();
+    }
+
+    spacer_row(ctx, widths, 8);
+    colored_label_row(ctx, widths, "Material controls:", LIGHTING_COLOR);
+    color_group_sliders(ctx, widths, "Material ambient:", &g_material.ambient);
+    if (compact_button(ctx, "Reset Material Ambient")) {
+      reset_material_ambient();
+    }
+
+    mu_end_window(ctx);
+  } else {
+    g_lighting_controls_window_open = false;
   }
 }
 
@@ -1150,6 +1302,7 @@ static void draw_window_controls_window(mu_Context *ctx,
                                         bool *reset_widgets_requested,
                                         bool *reset_canvas_requested,
                                         bool *reset_camera_controls_requested,
+                                        bool *reset_lighting_controls_requested,
                                         bool *show_mesh_details_requested) {
   int window_controls_options = MU_OPT_NOCLOSE | MU_OPT_NORESIZE;
 
@@ -1165,6 +1318,10 @@ static void draw_window_controls_window(mu_Context *ctx,
 
     if (button_row(ctx, widths, "Show / Reset Camera Controls")) {
       *reset_camera_controls_requested = true;
+    }
+
+    if (button_row(ctx, widths, "Show / Reset Lighting Controls")) {
+      *reset_lighting_controls_requested = true;
     }
 
     if (button_row(ctx, widths, "Show / Reset Canvas")) {
@@ -1183,13 +1340,13 @@ static void handle_ui_reset_requests(mu_Context *ctx,
                                      bool *reset_widgets_requested,
                                      bool *reset_canvas_requested,
                                      bool *reset_camera_controls_requested,
+                                     bool *reset_lighting_controls_requested,
                                      bool *show_mesh_details_requested) {
   // Reset requests are set by buttons, then applied at the start of the next UI frame.
   if (*reset_widgets_requested) {
     reset_ui_window(ctx, WIDGETS_WINDOW_TITLE, DEFAULT_WIDGETS_RECT);
     *reset_widgets_requested = false;
   }
-
 
   if (*reset_canvas_requested) {
     g_show_canvas_window = true;
@@ -1199,8 +1356,16 @@ static void handle_ui_reset_requests(mu_Context *ctx,
   }
 
   if (*reset_camera_controls_requested) {
+    g_show_camera_controls_window = true;
+    g_camera_controls_window_open = true;
     reset_ui_window(ctx, CAMERA_CONTROLS_TITLE, DEFAULT_CAMERA_CONTROLS_RECT);
     *reset_camera_controls_requested = false;
+  }
+
+  if (*reset_lighting_controls_requested) {
+    g_lighting_controls_window_open = true;
+    reset_ui_window(ctx, LIGHTING_CONTROLS_TITLE, DEFAULT_LIGHTING_CONTROLS_RECT);
+    *reset_lighting_controls_requested = false;
   }
 
   if (*show_mesh_details_requested) {
@@ -1221,8 +1386,12 @@ static void cache_all_ui_window_states(mu_Context *ctx) {
                           &g_canvas_window_rect, &g_canvas_window_open, false);
   }
 
-  cache_ui_window_state(ctx, CAMERA_CONTROLS_TITLE,
-                        &g_camera_controls_window_rect, &g_camera_controls_window_open, false);
+  if (g_show_camera_controls_window) {
+    cache_ui_window_state(ctx, CAMERA_CONTROLS_TITLE,
+                          &g_camera_controls_window_rect, &g_camera_controls_window_open, false);
+  }
+  cache_ui_window_state(ctx, LIGHTING_CONTROLS_TITLE,
+                        &g_lighting_controls_window_rect, &g_lighting_controls_window_open, false);
   cache_ui_window_state(ctx, WINDOW_CONTROLS_TITLE,
                         &g_window_controls_rect, &g_window_controls_open, true);
 
@@ -1544,12 +1713,13 @@ static bool project_face_to_screen(const Face &face,
   return true;
 }
 
-static void draw_filled_triangles() {
+static void draw_rasterized_triangles(bool use_ambient_lighting) {
   if (!g_mesh_loaded || !g_viewport_transform.valid) {
     return;
   }
 
   glm::mat4 model_view_matrix = build_model_view_matrix(build_model_matrix());
+  uint32_t ambient_color = ambient_lighting_debug_color();
 
   for (size_t i = 0; i < g_loaded_mesh.faces.size(); i++) {
     RasterVertex v0;
@@ -1565,8 +1735,17 @@ static void draw_filled_triangles() {
       continue;
     }
 
-    fill_triangle_in_bounds(rect, v0, v1, v2, triangle_debug_color(i));
+    uint32_t color = use_ambient_lighting ? ambient_color : triangle_debug_color(i);
+    fill_triangle_in_bounds(rect, v0, v1, v2, color);
   }
+}
+
+static void draw_filled_triangles() {
+  draw_rasterized_triangles(false);
+}
+
+static void draw_ambient_lighting() {
+  draw_rasterized_triangles(true);
 }
 
 static void draw_mesh_wireframe() {
@@ -2001,6 +2180,7 @@ int main() {
     static bool reset_widgets_requested = false;
     static bool reset_canvas_requested = false;
     static bool reset_camera_controls_requested = false;
+    static bool reset_lighting_controls_requested = false;
     static bool show_mesh_details_requested = false;
 
     mu_begin(ctx);
@@ -2009,14 +2189,17 @@ int main() {
     handle_ui_reset_requests(ctx, &reset_widgets_requested,
                              &reset_canvas_requested,
                              &reset_camera_controls_requested,
+                             &reset_lighting_controls_requested,
                              &show_mesh_details_requested);
     draw_widgets_window(ctx, &quit_requested);
     draw_camera_controls_window(ctx);
+    draw_lighting_controls_window(ctx);
     draw_creative_canvas_window(ctx);
     draw_mesh_details_window(ctx);
     draw_window_controls_window(ctx, &reset_widgets_requested,
                                 &reset_canvas_requested,
                                 &reset_camera_controls_requested,
+                                &reset_lighting_controls_requested,
                                 &show_mesh_details_requested);
     cache_all_ui_window_states(ctx);
 
@@ -2028,7 +2211,9 @@ int main() {
     }
 
     // Draw line work after UI logic but before the UI renderer overlays the panels.
-    if (g_show_filled_triangles || g_show_depth_map) {
+    if (g_show_ambient_lighting) {
+      draw_ambient_lighting();
+    } else if (g_show_filled_triangles || g_show_depth_map) {
       draw_filled_triangles();
       if (g_show_depth_map) {
         draw_depth_map();
