@@ -114,9 +114,9 @@ In this example, I tested the material side of the ambient equation. The ambient
     <td>Adding more red to the material means the object reflects more red under the same white light.</td>
   </tr>
   <tr>
-    <td>Reset the material ambient values</td>
-    <td>The object returned to the default blue material color.</td>
-    <td>The reset button restored the original material ambient color.</td>
+    <td>Reset material ambient</td>
+    <td>The object returned to the default blue color.</td>
+    <td>The values returned to the default material color.</td>
   </tr>
   <tr>
     <td>Decreased the second RGB slider (green)</td>
@@ -127,7 +127,7 @@ In this example, I tested the material side of the ambient equation. The ambient
 
 #### Light Ambient Example
 
-In this example, I kept the material color from the previous example and changed the light ambient color. This checks the light side of the equation.
+In this example, I kept the material color fixed and changed the light ambient color. This checks the light side of the equation.
 
 <img src="../assets/hw5/gifs/hw5_part1_light_ambient.gif" alt="Changing the light ambient color" width="500">
 
@@ -153,9 +153,9 @@ In this example, I kept the material color from the previous example and changed
     <td>Now both red and green light channels are weaker, so fewer color components remain strong in the final result.</td>
   </tr>
   <tr>
-    <td>Reset the light ambient values</td>
-    <td>The object became clearer again.</td>
-    <td>The light returned to white, so it stopped weakening the material color channels.</td>
+    <td>Reset light ambient</td>
+    <td>The object returned to the clearer default result.</td>
+    <td>The light returned to white.</td>
   </tr>
   <tr>
     <td>Decreased the third RGB slider (blue)</td>
@@ -165,7 +165,7 @@ In this example, I kept the material color from the previous example and changed
 </table>
 
 
-**Together, these examples show the ambient equation from both sides. Changing the material changes what color the object reflects, while changing the light changes how strongly each material color channel appears. The model stays flat because diffuse and specular lighting are not implemented yet.**
+**Together, these examples show both sides of the ambient equation. The material controls what color the object reflects, and the light controls how strongly those color channels appear. The model stays flat because diffuse and specular lighting are not implemented yet.**
 
 ---
 
@@ -181,3 +181,72 @@ The image and GIF show the new selector and how it switches between the render m
 
 <img src="../assets/hw5/images/hw5_render_mode_selector.png" alt="Render mode selector" width="450">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/gifs/hw5_render_mode_selector.gif" alt="Changing render modes" width="580">
 
+
+
+
+---
+
+## Part 2: Flat Shading (Diffuse Lighting)
+
+In Part 2, I added diffuse lighting using flat shading. The renderer now has a `Flat shading` render mode that still uses the filled triangle rasterizer and Z-buffer from Assignment 4.
+
+For each triangle, I calculate the lighting once using the face normal and triangle center. The same color is then used for all pixels inside that triangle, so the model looks faceted.
+
+```text
+diffuse strength = max(dot(face normal, light direction), 0)
+final color = ambient + diffuse
+```
+
+The diffuse part is calculated from the light diffuse color, the material diffuse color, and the diffuse strength:
+
+```text
+diffuse = light diffuse * material diffuse * diffuse strength
+```
+
+<img src="../assets/hw5/gifs/hw5_part2_flat_shading_mode.gif" alt="Switching to flat shading mode and rotating the model" width="520">
+
+The GIF shows the model in `Flat shading` mode. When the model rotates, the faces keep a flat color per triangle, but different faces have different brightness depending on their normals and the light direction.
+
+---
+
+### Light Position Helper
+
+The light is stored as a point in world space. For each triangle, I calculate the light direction from the triangle center toward the light position:
+
+```text
+light direction = light position - triangle center
+```
+
+To make the light position easier to see, I added a debug checkbox called `Show light position`, so I can turn the helper on only when I need it. It draws a small yellow marker at the point light position and a line from the light toward the model center. This helper is only for visualization; the diffuse calculation still uses each triangle center.
+
+<img src="../assets/hw5/images/hw5_part2_light_position_checkbox.png" alt="Show light position checkbox" width="260">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/images/hw5_part2_light_position_values.png" alt="Light position values" width="300">
+
+The screenshot shows the light position controls. In the example, I moved the Y value toward the positive side, while X and Z stayed at their default values. This makes the light come more from one vertical side of the model, so it is easier to see the lighting direction change.
+
+<img src="../assets/hw5/gifs/hw5_part2_light_position.gif" alt="Moving the light position while showing the light helper" width="520">
+
+In this example, I moved the light position on the Y axis. Faces facing the light become brighter, while other faces become darker. This shows that the diffuse value depends on the angle between the face normal and the light direction. I did not add distance attenuation yet, so the important change here is direction, not distance.
+
+---
+
+### Light Diffuse Color
+
+The `Light diffuse` controls the color and strength of the diffuse light. Its default value is white, `(1, 1, 1)`, meaning full red, green, and blue intensity. This keeps the material color clear before testing the sliders.
+
+<img src="../assets/hw5/images/hw5_part2_light_diffuse_values.png" alt="Light diffuse values" width="300">
+<img src="../assets/hw5/gifs/hw5_part2_light_diffuse.gif" alt="Changing the light diffuse color" width="520">
+
+In this example, I first tried changing the blue diffuse value, but the change was hard to see because the ambient blue color was still strong. To make the diffuse effect clearer, I lowered the blue ambient value, then changed the blue diffuse value again. After that, the lit faces changed more clearly. This shows that `Light diffuse` is working, but a strong ambient color can hide small diffuse changes. Resetting `Light diffuse` returns it to the default white diffuse light.
+
+---
+
+### Material Diffuse Color
+
+The `Material diffuse` controls what diffuse color the object reflects. Its default matches the blue material color from Part 1, `(0.25, 0.55, 0.90)`. Since the blue value is high and the red value is lower, changes in the material channels are easy to see.
+
+<img src="../assets/hw5/images/hw5_part2_material_diffuse_values.png" alt="Material diffuse values" width="300">
+<img src="../assets/hw5/gifs/hw5_part2_material_diffuse.gif" alt="Changing the material diffuse color" width="520">
+
+In this example, I changed the material diffuse channels. Lowering the blue value made the diffuse part less blue, and changing the red value changed how much red the material could reflect in the lit faces. Resetting `Material diffuse` returns the material to the default blue diffuse color.
+
+These examples show that Part 2 adds direction-based diffuse lighting. Ambient lighting gives the base color, while diffuse lighting changes the face brightness using the light direction and the light/material diffuse colors. Specular lighting is not implemented yet.

@@ -133,7 +133,14 @@ enum RenderMode {
   RENDER_WIREFRAME,
   RENDER_FILLED_TRIANGLES,
   RENDER_DEPTH_MAP,
-  RENDER_AMBIENT_LIGHTING
+  RENDER_AMBIENT_LIGHTING,
+  RENDER_FLAT_SHADING
+};
+
+enum TriangleColorMode {
+  TRIANGLE_DEBUG_COLORS,
+  TRIANGLE_AMBIENT_LIGHTING,
+  TRIANGLE_FLAT_SHADING
 };
 
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
@@ -161,7 +168,8 @@ static const char *RENDER_MODE_NAMES[] = {
     "Wireframe",
     "Filled triangles",
     "Depth map",
-    "Ambient lighting"};
+    "Ambient lighting",
+    "Flat shading"};
 static const int RENDER_MODE_COUNT = sizeof(RENDER_MODE_NAMES) / sizeof(RENDER_MODE_NAMES[0]);
 static const float TRANSLATION_MIN = -2.0f;
 static const float TRANSLATION_MAX = 2.0f;
@@ -217,6 +225,7 @@ static const uint32_t AXIS_Z_COLOR = MFB_RGB(90, 140, 255);   // Blue Z axis
 static const uint32_t BOUNDING_BOX_COLOR = MFB_RGB(255, 225, 90); // Yellow box edges
 static const uint32_t FACE_NORMAL_COLOR = MFB_RGB(255, 120, 220);  // Pink face normals
 static const uint32_t VERTEX_NORMAL_COLOR = MFB_RGB(80, 255, 230); // Cyan vertex normals
+static const uint32_t LIGHT_POSITION_COLOR = MFB_RGB(255, 245, 120); // Light helper
 
 static const PointLight DEFAULT_POINT_LIGHT = {
     glm::vec3(1.5f, 1.5f, 2.0f),
@@ -279,6 +288,7 @@ static int g_show_coordinate_axes = 0; // Draw world and local coordinate axes
 static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
 static int g_show_face_normals = 0;     // Draw one normal from each triangle center
 static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh vertices
+static int g_show_light_position = 0;   // Draw point light helper
 
 // Main render mode state
 static RenderMode g_render_mode = RENDER_WIREFRAME;
@@ -600,8 +610,16 @@ static void reset_light_ambient() {
   g_point_light.ambient = DEFAULT_POINT_LIGHT.ambient;
 }
 
+static void reset_light_diffuse() {
+  g_point_light.diffuse = DEFAULT_POINT_LIGHT.diffuse;
+}
+
 static void reset_material_ambient() {
   g_material.ambient = DEFAULT_MATERIAL.ambient;
+}
+
+static void reset_material_diffuse() {
+  g_material.diffuse = DEFAULT_MATERIAL.diffuse;
 }
 
 static float clamp_color_value(float value) {
@@ -618,10 +636,44 @@ static uint32_t rgb_float_color(const glm::vec3 &color) {
                  color_float_to_byte(color.b));
 }
 
+static glm::vec3 apply_model_transform(const glm::vec3 &vertex,
+                                       const glm::mat4 &model_matrix);
+static glm::vec3 transform_normal_direction(const glm::vec3 &normal,
+                                            const glm::mat4 &model_matrix);
+
+static glm::vec3 multiply_color(const glm::vec3 &a, const glm::vec3 &b) {
+  return glm::vec3(a.r * b.r, a.g * b.g, a.b * b.b);
+}
+
 static glm::vec3 ambient_lighting_color() {
-  return glm::vec3(g_point_light.ambient.r * g_material.ambient.r,
-                   g_point_light.ambient.g * g_material.ambient.g,
-                   g_point_light.ambient.b * g_material.ambient.b);
+  return multiply_color(g_point_light.ambient, g_material.ambient);
+}
+
+static glm::vec3 flat_shading_color(size_t face_index,
+                                    const glm::mat4 &model_matrix) {
+  glm::vec3 color = ambient_lighting_color();
+
+  if (face_index >= g_loaded_mesh.faces.size() ||
+      face_index >= g_loaded_mesh.face_normals.size()) {
+    return color;
+  }
+
+  const Face &face = g_loaded_mesh.faces[face_index];
+  glm::vec3 world_v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
+                                             model_matrix);
+  glm::vec3 world_v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
+                                             model_matrix);
+  glm::vec3 world_v2 = apply_model_transform(g_loaded_mesh.vertices[face.v2],
+                                             model_matrix);
+  glm::vec3 face_center = (world_v0 + world_v1 + world_v2) / 3.0f;
+  glm::vec3 normal = transform_normal_direction(g_loaded_mesh.face_normals[face_index],
+                                                model_matrix);
+  glm::vec3 light_direction = normalize_or_zero(g_point_light.position - face_center);
+  float diffuse_strength = std::max(glm::dot(normal, light_direction), 0.0f);
+
+  glm::vec3 diffuse = multiply_color(g_point_light.diffuse, g_material.diffuse) *
+                      diffuse_strength;
+  return color + diffuse;
 }
 
 static uint32_t ambient_lighting_debug_color() {
@@ -675,7 +727,7 @@ static bool load_mesh_option(int option_index);
 static void draw_keyboard_controls(mu_Context *ctx, int *widths) {
   mu_Color keyboard_color = KEYBOARD_COLOR;
   colored_label_row(ctx, widths, "Keyboard controls:", keyboard_color);
-  colored_label_row(ctx, widths, "P: background Plain > Circles > Checker", keyboard_color);
+  colored_label_row(ctx, widths, "P: background (Plain > Circle > Checker)", keyboard_color);
   colored_label_row(ctx, widths, "I: invert background colors", keyboard_color);
 }
 
@@ -1118,6 +1170,7 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show bounding box", &g_show_bounding_box);
   checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
+  checkbox_row(ctx, widths, "Show light position", &g_show_light_position);
 
   spacer_row(ctx, widths, 8);
   colored_label_row(ctx, widths, "Render mode:", DEBUG_COLOR);
@@ -1167,9 +1220,7 @@ static void draw_widgets_window(mu_Context *ctx, bool *quit_requested) {
       draw_background_controls(ctx, widths);
     }
 
-    spacer_row(ctx, widths, 8);
     draw_mesh_controls(ctx, widths);
-
     draw_transform_controls(ctx, widths);
 
     if (button_row(ctx, widths, "Quit")) {
@@ -1303,11 +1354,23 @@ static void draw_lighting_controls_window(mu_Context *ctx) {
       reset_light_ambient();
     }
 
+    spacer_row(ctx, widths, 6);
+    color_group_sliders(ctx, widths, "Light diffuse:", &g_point_light.diffuse);
+    if (compact_button(ctx, "Reset Light Diffuse")) {
+      reset_light_diffuse();
+    }
+
     spacer_row(ctx, widths, 8);
     colored_label_row(ctx, widths, "Material controls:", LIGHTING_COLOR);
     color_group_sliders(ctx, widths, "Material ambient:", &g_material.ambient);
     if (compact_button(ctx, "Reset Material Ambient")) {
       reset_material_ambient();
+    }
+
+    spacer_row(ctx, widths, 6);
+    color_group_sliders(ctx, widths, "Material diffuse:", &g_material.diffuse);
+    if (compact_button(ctx, "Reset Material Diffuse")) {
+      reset_material_diffuse();
     }
 
     mu_end_window(ctx);
@@ -1731,13 +1794,27 @@ static bool project_face_to_screen(const Face &face,
   return true;
 }
 
-static void draw_rasterized_triangles(bool use_ambient_lighting) {
+static uint32_t raster_triangle_color(size_t face_index,
+                                      TriangleColorMode color_mode,
+                                      const glm::mat4 &model_matrix) {
+  switch (color_mode) {
+  case TRIANGLE_AMBIENT_LIGHTING:
+    return ambient_lighting_debug_color();
+  case TRIANGLE_FLAT_SHADING:
+    return rgb_float_color(flat_shading_color(face_index, model_matrix));
+  case TRIANGLE_DEBUG_COLORS:
+  default:
+    return triangle_debug_color(face_index);
+  }
+}
+
+static void draw_rasterized_triangles(TriangleColorMode color_mode) {
   if (!g_mesh_loaded || !g_viewport_transform.valid) {
     return;
   }
 
-  glm::mat4 model_view_matrix = build_model_view_matrix(build_model_matrix());
-  uint32_t ambient_color = ambient_lighting_debug_color();
+  glm::mat4 model_matrix = build_model_matrix();
+  glm::mat4 model_view_matrix = build_model_view_matrix(model_matrix);
 
   for (size_t i = 0; i < g_loaded_mesh.faces.size(); i++) {
     RasterVertex v0;
@@ -1753,17 +1830,21 @@ static void draw_rasterized_triangles(bool use_ambient_lighting) {
       continue;
     }
 
-    uint32_t color = use_ambient_lighting ? ambient_color : triangle_debug_color(i);
+    uint32_t color = raster_triangle_color(i, color_mode, model_matrix);
     fill_triangle_in_bounds(rect, v0, v1, v2, color);
   }
 }
 
 static void draw_filled_triangles() {
-  draw_rasterized_triangles(false);
+  draw_rasterized_triangles(TRIANGLE_DEBUG_COLORS);
 }
 
 static void draw_ambient_lighting() {
-  draw_rasterized_triangles(true);
+  draw_rasterized_triangles(TRIANGLE_AMBIENT_LIGHTING);
+}
+
+static void draw_flat_shading() {
+  draw_rasterized_triangles(TRIANGLE_FLAT_SHADING);
 }
 
 static void draw_mesh_wireframe() {
@@ -1942,6 +2023,32 @@ static void draw_face_normals() {
     draw_normal_debug_line(center, g_loaded_mesh.face_normals[i],
                            model_view_matrix, normal_length, FACE_NORMAL_COLOR);
   }
+}
+
+static void draw_light_position() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_light_position) {
+    return;
+  }
+
+  glm::mat4 model_matrix = build_model_matrix();
+  glm::mat4 view_matrix = build_view_matrix();
+  glm::vec3 world_center = apply_model_transform(g_viewport_transform.center,
+                                                 model_matrix);
+  glm::vec3 view_light = apply_model_transform(g_point_light.position,
+                                               view_matrix);
+  glm::vec3 view_center = apply_model_transform(world_center, view_matrix);
+  float marker_size = 0.12f;
+
+  draw_view_space_3d_line(view_light, view_center, LIGHT_POSITION_COLOR);
+  draw_view_space_3d_line(view_light + glm::vec3(-marker_size, 0.0f, 0.0f),
+                          view_light + glm::vec3(marker_size, 0.0f, 0.0f),
+                          LIGHT_POSITION_COLOR);
+  draw_view_space_3d_line(view_light + glm::vec3(0.0f, -marker_size, 0.0f),
+                          view_light + glm::vec3(0.0f, marker_size, 0.0f),
+                          LIGHT_POSITION_COLOR);
+  draw_view_space_3d_line(view_light + glm::vec3(0.0f, 0.0f, -marker_size),
+                          view_light + glm::vec3(0.0f, 0.0f, marker_size),
+                          LIGHT_POSITION_COLOR);
 }
 
 static void draw_vertex_normals() {
@@ -2240,6 +2347,9 @@ int main() {
     case RENDER_AMBIENT_LIGHTING:
       draw_ambient_lighting();
       break;
+    case RENDER_FLAT_SHADING:
+      draw_flat_shading();
+      break;
     case RENDER_WIREFRAME:
     default:
       draw_mesh_wireframe();
@@ -2249,6 +2359,7 @@ int main() {
     draw_coordinate_axes();
     draw_face_normals();
     draw_vertex_normals();
+    draw_light_position();
     draw_line_overlay();
 
     // 4. UI Rendering
