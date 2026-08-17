@@ -82,6 +82,7 @@ struct Material {
   glm::vec3 ambient;  // material color reflected by ambient light
   glm::vec3 diffuse;  // material diffuse color for later parts
   glm::vec3 specular; // material specular color for later parts
+  float shininess;    // specular highlight exponent
 };
 
 struct ScreenPoint {
@@ -105,6 +106,15 @@ struct BarycentricWeights {
   float alpha;
   float beta;
   float gamma;
+};
+
+struct FaceLightingData {
+  glm::vec3 center;
+  glm::vec3 normal;
+  glm::vec3 light_direction;
+  glm::vec3 view_direction;
+  glm::vec3 reflection_direction;
+  float diffuse_strength;
 };
 
 enum BackgroundMode {
@@ -134,13 +144,15 @@ enum RenderMode {
   RENDER_FILLED_TRIANGLES,
   RENDER_DEPTH_MAP,
   RENDER_AMBIENT_LIGHTING,
-  RENDER_FLAT_SHADING
+  RENDER_FLAT_SHADING,
+  RENDER_SPECULAR_HIGHLIGHTS
 };
 
 enum TriangleColorMode {
   TRIANGLE_DEBUG_COLORS,
   TRIANGLE_AMBIENT_LIGHTING,
-  TRIANGLE_FLAT_SHADING
+  TRIANGLE_FLAT_SHADING,
+  TRIANGLE_SPECULAR_HIGHLIGHTS
 };
 
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
@@ -169,7 +181,8 @@ static const char *RENDER_MODE_NAMES[] = {
     "Filled triangles",
     "Depth map",
     "Ambient lighting",
-    "Flat shading"};
+    "Flat shading",
+    "Specular highlights"};
 static const int RENDER_MODE_COUNT = sizeof(RENDER_MODE_NAMES) / sizeof(RENDER_MODE_NAMES[0]);
 static const float TRANSLATION_MIN = -2.0f;
 static const float TRANSLATION_MAX = 2.0f;
@@ -201,6 +214,9 @@ static const float LIGHT_POSITION_MIN = -5.0f;
 static const float LIGHT_POSITION_MAX = 5.0f;
 static const float COLOR_INTENSITY_MIN = 0.0f;
 static const float COLOR_INTENSITY_MAX = 1.0f;
+static const float SHININESS_MIN = 1.0f;
+static const float SHININESS_MAX = 128.0f;
+static const int SPECULAR_VECTOR_FACE_COUNT = 6;
 
 static const mu_Rect DEFAULT_WIDGETS_RECT = {20, 20, 460, 860};             // Left scene controls
 static const mu_Rect DEFAULT_WINDOW_CONTROLS_RECT = {1220, 20, 360, 250};   // Upper right
@@ -226,6 +242,8 @@ static const uint32_t BOUNDING_BOX_COLOR = MFB_RGB(255, 225, 90); // Yellow box 
 static const uint32_t FACE_NORMAL_COLOR = MFB_RGB(255, 120, 220);  // Pink face normals
 static const uint32_t VERTEX_NORMAL_COLOR = MFB_RGB(80, 255, 230); // Cyan vertex normals
 static const uint32_t LIGHT_POSITION_COLOR = MFB_RGB(255, 245, 120); // Light helper
+static const uint32_t SPECULAR_LIGHT_VECTOR_COLOR = MFB_RGB(255, 40, 40); // Incoming light vector
+static const uint32_t SPECULAR_REFLECTION_VECTOR_COLOR = MFB_RGB(0, 0, 0); // Reflection vector
 
 static const PointLight DEFAULT_POINT_LIGHT = {
     glm::vec3(1.5f, 1.5f, 2.0f),
@@ -235,7 +253,8 @@ static const PointLight DEFAULT_POINT_LIGHT = {
 static const Material DEFAULT_MATERIAL = {
     glm::vec3(0.25f, 0.55f, 0.9f),
     glm::vec3(0.25f, 0.55f, 0.9f),
-    glm::vec3(1.0f, 1.0f, 1.0f)};
+    glm::vec3(1.0f, 1.0f, 1.0f),
+    32.0f};
 
 // Framebuffer state
 static uint32_t g_buffer[WIDTH * HEIGHT];
@@ -289,6 +308,7 @@ static int g_show_bounding_box = 0;     // Draw transformed mesh bounding box
 static int g_show_face_normals = 0;     // Draw one normal from each triangle center
 static int g_show_vertex_normals = 0;   // Draw averaged normals from mesh vertices
 static int g_show_light_position = 0;   // Draw point light helper
+static int g_show_specular_vectors = 0; // Draw light and reflection vectors
 
 // Main render mode state
 static RenderMode g_render_mode = RENDER_WIREFRAME;
@@ -614,12 +634,24 @@ static void reset_light_diffuse() {
   g_point_light.diffuse = DEFAULT_POINT_LIGHT.diffuse;
 }
 
+static void reset_light_specular() {
+  g_point_light.specular = DEFAULT_POINT_LIGHT.specular;
+}
+
 static void reset_material_ambient() {
   g_material.ambient = DEFAULT_MATERIAL.ambient;
 }
 
 static void reset_material_diffuse() {
   g_material.diffuse = DEFAULT_MATERIAL.diffuse;
+}
+
+static void reset_material_specular() {
+  g_material.specular = DEFAULT_MATERIAL.specular;
+}
+
+static void reset_material_shininess() {
+  g_material.shininess = DEFAULT_MATERIAL.shininess;
 }
 
 static float clamp_color_value(float value) {
@@ -649,13 +681,17 @@ static glm::vec3 ambient_lighting_color() {
   return multiply_color(g_point_light.ambient, g_material.ambient);
 }
 
-static glm::vec3 flat_shading_color(size_t face_index,
-                                    const glm::mat4 &model_matrix) {
-  glm::vec3 color = ambient_lighting_color();
+static glm::vec3 reflection_vector(const glm::vec3 &light_direction,
+                                   const glm::vec3 &normal) {
+  return normalize_or_zero(glm::reflect(-light_direction, normal));
+}
 
+static bool face_lighting_data(size_t face_index,
+                               const glm::mat4 &model_matrix,
+                               FaceLightingData &data) {
   if (face_index >= g_loaded_mesh.faces.size() ||
       face_index >= g_loaded_mesh.face_normals.size()) {
-    return color;
+    return false;
   }
 
   const Face &face = g_loaded_mesh.faces[face_index];
@@ -669,11 +705,57 @@ static glm::vec3 flat_shading_color(size_t face_index,
   glm::vec3 normal = transform_normal_direction(g_loaded_mesh.face_normals[face_index],
                                                 model_matrix);
   glm::vec3 light_direction = normalize_or_zero(g_point_light.position - face_center);
+  glm::vec3 view_direction = normalize_or_zero(g_camera.position - face_center);
   float diffuse_strength = std::max(glm::dot(normal, light_direction), 0.0f);
 
-  glm::vec3 diffuse = multiply_color(g_point_light.diffuse, g_material.diffuse) *
-                      diffuse_strength;
-  return color + diffuse;
+  data.center = face_center;
+  data.normal = normal;
+  data.light_direction = light_direction;
+  data.view_direction = view_direction;
+  data.reflection_direction = reflection_vector(light_direction, normal);
+  data.diffuse_strength = diffuse_strength;
+  return true;
+}
+
+static glm::vec3 diffuse_lighting_color(const FaceLightingData &data) {
+  return multiply_color(g_point_light.diffuse, g_material.diffuse) *
+         data.diffuse_strength;
+}
+
+static glm::vec3 specular_lighting_color(const FaceLightingData &data) {
+  if (data.diffuse_strength <= 0.0f) {
+    return glm::vec3(0.0f);
+  }
+
+  float specular_strength = std::pow(
+      std::max(glm::dot(data.reflection_direction, data.view_direction), 0.0f),
+      g_material.shininess);
+  return multiply_color(g_point_light.specular, g_material.specular) *
+         specular_strength;
+}
+
+static glm::vec3 flat_shading_color_from_data(const FaceLightingData &data) {
+  return ambient_lighting_color() + diffuse_lighting_color(data);
+}
+
+static glm::vec3 flat_shading_color(size_t face_index,
+                                    const glm::mat4 &model_matrix) {
+  FaceLightingData data;
+  if (!face_lighting_data(face_index, model_matrix, data)) {
+    return ambient_lighting_color();
+  }
+
+  return flat_shading_color_from_data(data);
+}
+
+static glm::vec3 specular_highlight_color(size_t face_index,
+                                          const glm::mat4 &model_matrix) {
+  FaceLightingData data;
+  if (!face_lighting_data(face_index, model_matrix, data)) {
+    return ambient_lighting_color();
+  }
+
+  return flat_shading_color_from_data(data) + specular_lighting_color(data);
 }
 
 static uint32_t ambient_lighting_debug_color() {
@@ -1171,6 +1253,7 @@ static void draw_transform_controls(mu_Context *ctx, int *widths) {
   checkbox_row(ctx, widths, "Show face normals", &g_show_face_normals);
   checkbox_row(ctx, widths, "Show vertex normals", &g_show_vertex_normals);
   checkbox_row(ctx, widths, "Show light position", &g_show_light_position);
+  checkbox_row(ctx, widths, "Show specular vectors", &g_show_specular_vectors);
 
   spacer_row(ctx, widths, 8);
   colored_label_row(ctx, widths, "Render mode:", DEBUG_COLOR);
@@ -1360,6 +1443,12 @@ static void draw_lighting_controls_window(mu_Context *ctx) {
       reset_light_diffuse();
     }
 
+    spacer_row(ctx, widths, 6);
+    color_group_sliders(ctx, widths, "Light specular:", &g_point_light.specular);
+    if (compact_button(ctx, "Reset Light Specular")) {
+      reset_light_specular();
+    }
+
     spacer_row(ctx, widths, 8);
     colored_label_row(ctx, widths, "Material controls:", LIGHTING_COLOR);
     color_group_sliders(ctx, widths, "Material ambient:", &g_material.ambient);
@@ -1371,6 +1460,20 @@ static void draw_lighting_controls_window(mu_Context *ctx) {
     color_group_sliders(ctx, widths, "Material diffuse:", &g_material.diffuse);
     if (compact_button(ctx, "Reset Material Diffuse")) {
       reset_material_diffuse();
+    }
+
+    spacer_row(ctx, widths, 6);
+    color_group_sliders(ctx, widths, "Material specular:", &g_material.specular);
+    if (compact_button(ctx, "Reset Material Specular")) {
+      reset_material_specular();
+    }
+
+    spacer_row(ctx, widths, 6);
+    colored_label_row(ctx, widths, "Material shininess:", LIGHTING_COLOR);
+    compact_value_slider_row(ctx, "S:", &g_material.shininess,
+                             SHININESS_MIN, SHININESS_MAX);
+    if (compact_button(ctx, "Reset Shininess")) {
+      reset_material_shininess();
     }
 
     mu_end_window(ctx);
@@ -1802,6 +1905,8 @@ static uint32_t raster_triangle_color(size_t face_index,
     return ambient_lighting_debug_color();
   case TRIANGLE_FLAT_SHADING:
     return rgb_float_color(flat_shading_color(face_index, model_matrix));
+  case TRIANGLE_SPECULAR_HIGHLIGHTS:
+    return rgb_float_color(specular_highlight_color(face_index, model_matrix));
   case TRIANGLE_DEBUG_COLORS:
   default:
     return triangle_debug_color(face_index);
@@ -1845,6 +1950,10 @@ static void draw_ambient_lighting() {
 
 static void draw_flat_shading() {
   draw_rasterized_triangles(TRIANGLE_FLAT_SHADING);
+}
+
+static void draw_specular_highlights() {
+  draw_rasterized_triangles(TRIANGLE_SPECULAR_HIGHLIGHTS);
 }
 
 static void draw_mesh_wireframe() {
@@ -2051,6 +2160,45 @@ static void draw_light_position() {
                           LIGHT_POSITION_COLOR);
 }
 
+static void draw_specular_vectors() {
+  if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_specular_vectors) {
+    return;
+  }
+
+  float vector_length = normal_debug_length() * 1.4f;
+  if (vector_length <= 0.0f) {
+    return;
+  }
+
+  glm::mat4 model_matrix = build_model_matrix();
+  glm::mat4 view_matrix = build_view_matrix();
+  int drawn_faces = 0;
+
+  for (size_t i = 0; i < g_loaded_mesh.faces.size(); i++) {
+    FaceLightingData data;
+    if (!face_lighting_data(i, model_matrix, data)) {
+      continue;
+    }
+
+    glm::vec3 view_center = apply_model_transform(data.center, view_matrix);
+    glm::vec3 view_light_direction =
+        normalize_or_zero(glm::mat3(view_matrix) * data.light_direction);
+    glm::vec3 view_reflection_direction =
+        normalize_or_zero(glm::mat3(view_matrix) * data.reflection_direction);
+
+    draw_view_space_3d_line(view_center,
+                            view_center + view_light_direction * vector_length,
+                            SPECULAR_LIGHT_VECTOR_COLOR);
+    draw_view_space_3d_line(view_center,
+                            view_center + view_reflection_direction * vector_length,
+                            SPECULAR_REFLECTION_VECTOR_COLOR);
+
+    drawn_faces++;
+    if (drawn_faces >= SPECULAR_VECTOR_FACE_COUNT) {
+      break;
+    }
+  }
+}
 static void draw_vertex_normals() {
   if (!g_mesh_loaded || !g_viewport_transform.valid || !g_show_vertex_normals) {
     return;
@@ -2350,6 +2498,9 @@ int main() {
     case RENDER_FLAT_SHADING:
       draw_flat_shading();
       break;
+    case RENDER_SPECULAR_HIGHLIGHTS:
+      draw_specular_highlights();
+      break;
     case RENDER_WIREFRAME:
     default:
       draw_mesh_wireframe();
@@ -2360,6 +2511,7 @@ int main() {
     draw_face_normals();
     draw_vertex_normals();
     draw_light_position();
+    draw_specular_vectors();
     draw_line_overlay();
 
     // 4. UI Rendering
