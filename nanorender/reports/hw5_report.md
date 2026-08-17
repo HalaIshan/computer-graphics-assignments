@@ -281,7 +281,7 @@ I added these controls so I could test the shiny part directly from the UI:
 
 <img src="../assets/hw5/images/hw5_part3_light_specular_values.png" alt="Light specular values" width="330">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/images/hw5_part3_material_specular_values.png" alt="Material specular values" width="330">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/images/hw5_part3_material_shininess_values.png" alt="Material shininess values" width="330">
 
-The new controls are `Light specular`, `Material specular`, and `Material shininess`. They match the specular color equation:
+The new controls are `Light specular`, `Material specular`, and `Material shininess`, which match the specular color equation:
 
 ```text
 specular color = light specular * material specular * specular strength
@@ -301,9 +301,9 @@ With this setup, the shiny part became easier to separate from the normal face c
 
 <img src="../assets/hw5/gifs/hw5_part3_specular_highlights_mode.gif" alt="Switching to specular highlights mode" width="520">
 
-I rotated the pyramid so more faces were visible, then started recording this example. In the video, I switched to `Specular highlights` mode. I used a very low shininess value here because it makes the highlight wide and clear for the first check.
+I rotated the pyramid so more faces were visible, then switched to `Specular highlights` mode. I used a very low shininess value here because it makes the highlight wide and clear for the first check.
 
-This was my first visual check that Part 3 was active. The object still has ambient and diffuse lighting, but now a shiny highlight is added to the final color.
+This shows that Part 3 is active: the object still has ambient and diffuse lighting, but now a shiny highlight is added to the final color.
 
 ---
 
@@ -335,6 +335,18 @@ For the required vector check, I added `Show specular vectors`. The assignment a
 
 In this debug view, I turned on `Show specular vectors` with the light position helper. The red line starts from the face center and points toward the light, so it shows the light direction used for that triangle. The black line shows the reflection direction after the light vector is reflected around the face normal.
 
-I draw the vectors from the face centers because the specular calculation in this part is done once per triangle, the same as flat shading. When I rotated the model, the vectors changed with the faces because the face centers and normals changed. This helped me check that the reflection direction used for the highlight is connected to the triangle normal and the light direction.
+I draw the vectors from the face centers because this specular calculation is done once per triangle, the same as flat shading. When I rotated the model, the vectors changed with the faces, which helped me check that the reflection direction is connected to the triangle normal and light direction.
 
 From these examples, I could see that specular lighting depends on the light direction, face normal, camera direction, and shininess value. The highlight became clear only when these values were set in a way that made the reflection direction visible from the camera.
+
+---
+
+## Part 4: Phong Shading (Per-Pixel Shading)
+
+Before implementing Phong shading, I added `smooth_sphere.obj` as a curved test model. The cube and pyramid have sharp faces, so they are useful for flat shading, but they do not show the difference between flat shading and Phong shading as clearly as a curved surface.
+
+I used AI assistance to generate the sphere OBJ file because creating a curved mesh manually would require many vertices and faces. I checked it by loading it in the renderer, and I will use it only as the comparison model for Part 4 with the same camera and light setup.
+
+<img src="../assets/hw5/gifs/hw5_part4_sphere_model_preparation.gif" alt="Loading the smooth sphere model for Part 4" width="520">
+
+This GIF shows the sphere loaded in the renderer. It is useful for Part 4 because the surface is curved, so the difference between flat shading and per-pixel Phong shading should be easier to see.

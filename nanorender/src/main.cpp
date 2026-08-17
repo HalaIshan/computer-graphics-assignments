@@ -170,7 +170,8 @@ static const char *MODEL_SEARCH_PATHS[] = {
 static const MeshOption MESH_OPTIONS[] = {
     {"simple_pyramid.obj"},
     {"regular_cube.obj"},
-    {"angled_box.obj"}};
+    {"angled_box.obj"},
+    {"smooth_sphere.obj"}};
 
 static const int MODEL_SEARCH_PATH_COUNT = sizeof(MODEL_SEARCH_PATHS) / sizeof(MODEL_SEARCH_PATHS[0]);
 static const int MESH_OPTION_COUNT = sizeof(MESH_OPTIONS) / sizeof(MESH_OPTIONS[0]);
