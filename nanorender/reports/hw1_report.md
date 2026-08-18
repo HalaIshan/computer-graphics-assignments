@@ -183,7 +183,7 @@ This marker was only a debugging and documentation tool. It is not part of Micro
 
 First, I tested the original `ui_renderer.cpp`, without adding any visual offset.
 
-![Original renderer with click marker](../assets/hw1/gifs//part4_original_renderer_click_marker_existing_mismatch.gif)
+![Original renderer with click marker](../assets/hw1/gifs/part4_original_renderer_click_marker_existing_mismatch.gif)
 
 In this recording, the UI is still drawn in its original position. The red marker helped show the detected click position and made the initial mismatch easier to see.
 

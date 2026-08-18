@@ -100,6 +100,8 @@ struct ScreenRect {
 struct RasterVertex {
   ScreenPoint screen;
   float depth;
+  glm::vec3 world_position;
+  glm::vec3 world_normal;
 };
 
 struct BarycentricWeights {
@@ -145,14 +147,16 @@ enum RenderMode {
   RENDER_DEPTH_MAP,
   RENDER_AMBIENT_LIGHTING,
   RENDER_FLAT_SHADING,
-  RENDER_SPECULAR_HIGHLIGHTS
+  RENDER_SPECULAR_HIGHLIGHTS,
+  RENDER_PHONG_SHADING
 };
 
 enum TriangleColorMode {
   TRIANGLE_DEBUG_COLORS,
   TRIANGLE_AMBIENT_LIGHTING,
   TRIANGLE_FLAT_SHADING,
-  TRIANGLE_SPECULAR_HIGHLIGHTS
+  TRIANGLE_SPECULAR_HIGHLIGHTS,
+  TRIANGLE_PHONG_SHADING
 };
 
 static const char *WIDGETS_WINDOW_TITLE = "Scene Controls";            // Left scene panel
@@ -183,7 +187,8 @@ static const char *RENDER_MODE_NAMES[] = {
     "Depth map",
     "Ambient lighting",
     "Flat shading",
-    "Specular highlights"};
+    "Specular highlights",
+    "Phong shading"};
 static const int RENDER_MODE_COUNT = sizeof(RENDER_MODE_NAMES) / sizeof(RENDER_MODE_NAMES[0]);
 static const float TRANSLATION_MIN = -2.0f;
 static const float TRANSLATION_MAX = 2.0f;
@@ -757,6 +762,29 @@ static glm::vec3 specular_highlight_color(size_t face_index,
   }
 
   return flat_shading_color_from_data(data) + specular_lighting_color(data);
+}
+
+static glm::vec3 lighting_color_at_point(const glm::vec3 &world_position,
+                                         const glm::vec3 &world_normal) {
+  glm::vec3 normal = normalize_or_zero(world_normal);
+  glm::vec3 light_direction = normalize_or_zero(g_point_light.position - world_position);
+  glm::vec3 view_direction = normalize_or_zero(g_camera.position - world_position);
+  float diffuse_strength = std::max(glm::dot(normal, light_direction), 0.0f);
+
+  glm::vec3 color = ambient_lighting_color();
+  color += multiply_color(g_point_light.diffuse, g_material.diffuse) *
+           diffuse_strength;
+
+  if (diffuse_strength > 0.0f) {
+    glm::vec3 reflection_direction = reflection_vector(light_direction, normal);
+    float specular_strength = std::pow(
+        std::max(glm::dot(reflection_direction, view_direction), 0.0f),
+        g_material.shininess);
+    color += multiply_color(g_point_light.specular, g_material.specular) *
+             specular_strength;
+  }
+
+  return color;
 }
 
 static uint32_t ambient_lighting_debug_color() {
@@ -1846,6 +1874,13 @@ static float interpolate_depth(const BarycentricWeights &weights,
          weights.gamma * v2.depth;
 }
 
+static glm::vec3 interpolate_vec3(const BarycentricWeights &weights,
+                                  const glm::vec3 &v0,
+                                  const glm::vec3 &v1,
+                                  const glm::vec3 &v2) {
+  return weights.alpha * v0 + weights.beta * v1 + weights.gamma * v2;
+}
+
 static void fill_triangle_in_bounds(const ScreenRect &rect,
                                     const RasterVertex &v0,
                                     const RasterVertex &v1,
@@ -1870,15 +1905,56 @@ static void fill_triangle_in_bounds(const ScreenRect &rect,
   }
 }
 
+static void fill_phong_triangle_in_bounds(const ScreenRect &rect,
+                                          const RasterVertex &v0,
+                                          const RasterVertex &v1,
+                                          const RasterVertex &v2) {
+  for (int y = rect.min_y; y <= rect.max_y; y++) {
+    for (int x = rect.min_x; x <= rect.max_x; x++) {
+      BarycentricWeights weights = barycentric_coordinates((float)x + 0.5f,
+                                                           (float)y + 0.5f,
+                                                           v0.screen,
+                                                           v1.screen,
+                                                           v2.screen);
+      if (!is_inside_triangle(weights)) {
+        continue;
+      }
+
+      float depth = interpolate_depth(weights, v0, v1, v2);
+      if (!depth_test_and_write(x, y, depth)) {
+        continue;
+      }
+
+      glm::vec3 world_position = interpolate_vec3(weights,
+                                                  v0.world_position,
+                                                  v1.world_position,
+                                                  v2.world_position);
+      glm::vec3 world_normal = normalize_or_zero(interpolate_vec3(weights,
+                                                                  v0.world_normal,
+                                                                  v1.world_normal,
+                                                                  v2.world_normal));
+      draw_pixel(x, y, rgb_float_color(lighting_color_at_point(world_position,
+                                                               world_normal)));
+    }
+  }
+}
+
 static float view_depth(const glm::vec3 &view_vertex) {
   return std::abs(view_vertex.z);
 }
 
 static bool project_face_to_screen(const Face &face,
+                                   const glm::mat4 &model_matrix,
                                    const glm::mat4 &model_view_matrix,
                                    RasterVertex &v0,
                                    RasterVertex &v1,
                                    RasterVertex &v2) {
+  if (face.v0 >= (int)g_loaded_mesh.vertex_normals.size() ||
+      face.v1 >= (int)g_loaded_mesh.vertex_normals.size() ||
+      face.v2 >= (int)g_loaded_mesh.vertex_normals.size()) {
+    return false;
+  }
+
   glm::vec3 view_v0 = apply_model_transform(g_loaded_mesh.vertices[face.v0],
                                             model_view_matrix);
   glm::vec3 view_v1 = apply_model_transform(g_loaded_mesh.vertices[face.v1],
@@ -1895,6 +1971,20 @@ static bool project_face_to_screen(const Face &face,
   v0.depth = view_depth(view_v0);
   v1.depth = view_depth(view_v1);
   v2.depth = view_depth(view_v2);
+
+  v0.world_position = apply_model_transform(g_loaded_mesh.vertices[face.v0],
+                                            model_matrix);
+  v1.world_position = apply_model_transform(g_loaded_mesh.vertices[face.v1],
+                                            model_matrix);
+  v2.world_position = apply_model_transform(g_loaded_mesh.vertices[face.v2],
+                                            model_matrix);
+
+  v0.world_normal = transform_normal_direction(g_loaded_mesh.vertex_normals[face.v0],
+                                               model_matrix);
+  v1.world_normal = transform_normal_direction(g_loaded_mesh.vertex_normals[face.v1],
+                                               model_matrix);
+  v2.world_normal = transform_normal_direction(g_loaded_mesh.vertex_normals[face.v2],
+                                               model_matrix);
   return true;
 }
 
@@ -1926,8 +2016,8 @@ static void draw_rasterized_triangles(TriangleColorMode color_mode) {
     RasterVertex v0;
     RasterVertex v1;
     RasterVertex v2;
-    if (!project_face_to_screen(g_loaded_mesh.faces[i], model_view_matrix,
-                                v0, v1, v2)) {
+    if (!project_face_to_screen(g_loaded_mesh.faces[i], model_matrix,
+                                model_view_matrix, v0, v1, v2)) {
       continue;
     }
 
@@ -1936,8 +2026,12 @@ static void draw_rasterized_triangles(TriangleColorMode color_mode) {
       continue;
     }
 
-    uint32_t color = raster_triangle_color(i, color_mode, model_matrix);
-    fill_triangle_in_bounds(rect, v0, v1, v2, color);
+    if (color_mode == TRIANGLE_PHONG_SHADING) {
+      fill_phong_triangle_in_bounds(rect, v0, v1, v2);
+    } else {
+      uint32_t color = raster_triangle_color(i, color_mode, model_matrix);
+      fill_triangle_in_bounds(rect, v0, v1, v2, color);
+    }
   }
 }
 
@@ -1955,6 +2049,10 @@ static void draw_flat_shading() {
 
 static void draw_specular_highlights() {
   draw_rasterized_triangles(TRIANGLE_SPECULAR_HIGHLIGHTS);
+}
+
+static void draw_phong_shading() {
+  draw_rasterized_triangles(TRIANGLE_PHONG_SHADING);
 }
 
 static void draw_mesh_wireframe() {
@@ -2501,6 +2599,9 @@ int main() {
       break;
     case RENDER_SPECULAR_HIGHLIGHTS:
       draw_specular_highlights();
+      break;
+    case RENDER_PHONG_SHADING:
+      draw_phong_shading();
       break;
     case RENDER_WIREFRAME:
     default:

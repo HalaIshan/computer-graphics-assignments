@@ -57,7 +57,7 @@ I added a UI panel called `Light and Material` for the Part 1 controls.
 
 <table>
   <tr>
-    <td><img src="../assets/hw5/images/hw5_part1_light_material_ui.png" alt="Light and material controls" width="350"></td>
+    <td><img src="../assets/hw5/images/hw5_part1_light_material_ui.png" alt="Light and material controls" width="320"></td>
     <td>
       The default setup uses white ambient light and a blue material.<br>
       This makes the result easy to read because the white light keeps the material color clear.
@@ -95,7 +95,7 @@ I used two examples because the ambient equation has two sides: the material col
 
 In this example, I tested the material side of the ambient equation. The ambient light stayed white, so the changes mostly show how the material color affects the object.
 
-<img src="../assets/hw5/gifs/hw5_part1_material_ambient.gif" alt="Changing the material ambient color" width="500">
+<img src="../assets/hw5/gifs/hw5_part1_material_ambient.gif" alt="Changing the material ambient color" width="400">
 
 <table>
   <tr>
@@ -129,7 +129,7 @@ In this example, I tested the material side of the ambient equation. The ambient
 
 In this example, I kept the material color fixed and changed the light ambient color. This checks the light side of the equation.
 
-<img src="../assets/hw5/gifs/hw5_part1_light_ambient.gif" alt="Changing the light ambient color" width="500">
+<img src="../assets/hw5/gifs/hw5_part1_light_ambient.gif" alt="Changing the light ambient color" width="400">
 
 <table>
   <tr>
@@ -179,7 +179,7 @@ The debug drawings, such as axes, bounding box, and normals, stayed as checkboxe
 
 The image shows the selector UI, and the GIF shows that only one main render mode is active at a time.
 
-<img src="../assets/hw5/images/hw5_render_mode_selector.png" alt="Render mode selector" width="450">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/gifs/hw5_render_mode_selector.gif" alt="Changing render modes" width="580">
+<img src="../assets/hw5/images/hw5_render_mode_selector.png" alt="Render mode selector" width="400">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/gifs/hw5_render_mode_selector.gif" alt="Changing render modes" width="400">
 
 ---
 
@@ -200,7 +200,7 @@ The diffuse part is calculated from the light diffuse color, the material diffus
 diffuse = light diffuse * material diffuse * diffuse strength
 ```
 
-<img src="../assets/hw5/gifs/hw5_part2_flat_shading_mode.gif" alt="Switching to flat shading mode and rotating the model" width="520">
+<img src="../assets/hw5/gifs/hw5_part2_flat_shading_mode.gif" alt="Switching to flat shading mode and rotating the model" width="400">
 
 The GIF shows the model in `Flat shading` mode. When I rotate the model, each face keeps one flat color, but the brightness changes from face to face. This shows that the face normal and light direction are being used.
 
@@ -220,7 +220,7 @@ To make the light position easier to see, I added a debug checkbox called `Show 
 
 The screenshot shows the light position controls. In the example, I moved the Y value toward the positive side, while X and Z stayed at their default values. This makes the light come more from one vertical side of the model, so it is easier to see the lighting direction change.
 
-<img src="../assets/hw5/gifs/hw5_part2_light_position.gif" alt="Moving the light position while showing the light helper" width="520">
+<img src="../assets/hw5/gifs/hw5_part2_light_position.gif" alt="Moving the light position while showing the light helper" width="400">
 
 In this example, I moved the light position on the Y axis while showing the light helper. Faces facing the light become brighter, while other faces become darker. This shows that the diffuse value depends on the angle between the face normal and the light direction. I did not add distance attenuation yet, so the important change here is direction, not distance.
 
@@ -231,7 +231,7 @@ In this example, I moved the light position on the Y axis while showing the ligh
 The `Light diffuse` controls the color and strength of the diffuse light. Its default value is white, `(1, 1, 1)`, meaning full red, green, and blue intensity. This keeps the material color clear before testing the sliders.
 
 <img src="../assets/hw5/images/hw5_part2_light_diffuse_values.png" alt="Light diffuse values" width="300">
-<img src="../assets/hw5/gifs/hw5_part2_light_diffuse.gif" alt="Changing the light diffuse color" width="520">
+<img src="../assets/hw5/gifs/hw5_part2_light_diffuse.gif" alt="Changing the light diffuse color" width="400">
 
 In this example, I first tried changing the blue diffuse value, but the change was hard to see because the ambient blue color was still strong. To make the diffuse effect clearer, I lowered the blue ambient value, then changed the blue diffuse value again. After that, the lit faces changed more clearly. This showed me that `Light diffuse` was working, but a strong ambient color can hide small diffuse changes. After reset, the light returns to the default white diffuse color.
 
@@ -242,7 +242,7 @@ In this example, I first tried changing the blue diffuse value, but the change w
 The `Material diffuse` controls what diffuse color the object reflects. Its default matches the blue material color from Part 1, `(0.25, 0.55, 0.90)`. Since the material is blue-heavy, changing the blue or red channel makes the effect easier to notice.
 
 <img src="../assets/hw5/images/hw5_part2_material_diffuse_values.png" alt="Material diffuse values" width="300">
-<img src="../assets/hw5/gifs/hw5_part2_material_diffuse.gif" alt="Changing the material diffuse color" width="520">
+<img src="../assets/hw5/gifs/hw5_part2_material_diffuse.gif" alt="Changing the material diffuse color" width="400">
 
 In this example, I changed the material diffuse channels. Lowering the blue value made the diffuse part less blue, and changing the red value changed how much red the material could reflect in the lit faces. Resetting `Material diffuse` returns the material to the default blue diffuse color.
 
@@ -299,31 +299,43 @@ With this setup, the shiny part became easier to separate from the normal face c
 
 ### Specular Highlights Mode
 
-<img src="../assets/hw5/gifs/hw5_part3_specular_highlights_mode.gif" alt="Switching to specular highlights mode" width="520">
-
-I rotated the pyramid so more faces were visible, then switched to `Specular highlights` mode. I used a very low shininess value here because it makes the highlight wide and clear for the first check.
-
-This shows that Part 3 is active: the object still has ambient and diffuse lighting, but now a shiny highlight is added to the final color.
+<table>
+  <tr>
+    <td width="35%"><img src="../assets/hw5/gifs/hw5_part3_specular_highlights_mode.gif" alt="Switching to specular highlights mode" width="400">   </td>
+    <td>
+      I rotated the pyramid so more faces were visible, then switched to `Specular highlights` mode. I used a very low shininess value here because it makes the highlight wide and clear for the first check.<br><br>
+      This shows that Part 3 is active: the object still has ambient and diffuse lighting, but now a shiny highlight is added to the final color.
+    </td>
+  </tr>
+</table>
 
 ---
 
 ### Shininess Example
 
-<img src="../assets/hw5/gifs/hw5_part3_shininess_example.gif" alt="Changing the shininess value" width="520">
-
-In this example, I tested the `shininess` value. I started from the default value, then increased it to a high value. The change was not very visible because the highlight became too small. When I lowered shininess, the highlight became wider and easier to notice.
-
-This helped me understand what the exponent does in the specular equation: a high value keeps the bright area small, while a low value spreads it over a larger area.
+<table>
+  <tr>
+    <td width="35%"><img src="../assets/hw5/gifs/hw5_part3_shininess_example.gif" alt="Changing the shininess value" width="400"></td>
+    <td>
+      In this example, I tested the `shininess` value. I started from the default value, then increased it to a high value. The change was not very visible because the highlight became too small. When I lowered shininess, the highlight became wider and easier to notice.<br><br>
+      This helped me understand what the exponent does in the specular equation: a high value keeps the bright area small, while a low value spreads it over a larger area.
+    </td>
+  </tr>
+</table>
 
 ---
 
 ### Light Specular Example
 
-<img src="../assets/hw5/gifs/hw5_part3_light_specular.gif" alt="Changing the light specular color" width="520">
-
-In this example, I tested the color side of the specular light. I started with white specular light, then lowered the blue, green, and red channels one by one. As each channel became weaker, the highlight color shifted toward the remaining channels. At the end, I reset the light specular values back to white.
-
-This checks the light side of the specular equation. `Material specular` uses the same multiplication idea, but I did not include a separate GIF for it because the `Light specular` change was clearer in this setup.
+<table>
+  <tr>
+    <td width="35%"><img src="../assets/hw5/gifs/hw5_part3_light_specular.gif" alt="Changing the light specular color" width="400"></td>
+    <td>
+      In this example, I tested the color side of the specular light. I started with white specular light, then lowered the blue, green, and red channels one by one. As each channel became weaker, the highlight color shifted toward the remaining channels. At the end, I reset the light specular values back to white.<br><br>
+      This checks the light side of the specular equation. `Material specular` uses the same multiplication idea, but I did not include a separate GIF for it because the `Light specular` change was clearer in this setup.
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -331,11 +343,15 @@ This checks the light side of the specular equation. `Material specular` uses th
 
 For the required vector check, I added `Show specular vectors`. The assignment asks to draw the incoming light vector and the outgoing reflection vector from the center of a few faces.
 
-<img src="../assets/hw5/gifs/hw5_part3_specular_vectors_debug.gif" alt="Specular light and reflection vectors" width="520">
-
-In this debug view, I turned on `Show specular vectors` with the light position helper. The red line starts from the face center and points toward the light, so it shows the light direction used for that triangle. The black line shows the reflection direction after the light vector is reflected around the face normal.
-
-I draw the vectors from the face centers because this specular calculation is done once per triangle, the same as flat shading. When I rotated the model, the vectors changed with the faces, which helped me check that the reflection direction is connected to the triangle normal and light direction.
+<table>
+  <tr>
+    <td width="35%" ><img src="../assets/hw5/gifs/hw5_part3_specular_vectors_debug.gif" alt="Specular light and reflection vectors" width="400"></td>
+    <td>
+      In this debug view, I turned on `Show specular vectors` with the light position helper. The red line starts from the face center and points toward the light, so it shows the light direction used for that triangle. The black line shows the reflection direction after the light vector is reflected around the face normal.<br><br>
+      I draw the vectors from the face centers because this specular calculation is done once per triangle, the same as flat shading. When I rotated the model, the vectors changed with the faces, which helped me check that the reflection direction is connected to the triangle normal and light direction.<br><br>
+    </td>
+  </tr>
+</table>
 
 From these examples, I could see that specular lighting depends on the light direction, face normal, camera direction, and shininess value. The highlight became clear only when these values were set in a way that made the reflection direction visible from the camera.
 
@@ -345,8 +361,61 @@ From these examples, I could see that specular lighting depends on the light dir
 
 Before implementing Phong shading, I added `smooth_sphere.obj` as a curved test model. The cube and pyramid have sharp faces, so they are useful for flat shading, but they do not show the difference between flat shading and Phong shading as clearly as a curved surface.
 
-I used AI assistance to generate the sphere OBJ file because creating a curved mesh manually would require many vertices and faces. I checked it by loading it in the renderer, and I will use it only as the comparison model for Part 4 with the same camera and light setup.
+I used AI assistance to generate the sphere OBJ file because creating a curved mesh manually would require many vertices and faces. I checked it by loading it in the renderer, and I use it only as the comparison model for Part 4 with the same camera and light setup.
 
-<img src="../assets/hw5/gifs/hw5_part4_sphere_model_preparation.gif" alt="Loading the smooth sphere model for Part 4" width="520">
+<img src="../assets/hw5/images/hw5_part4_sphere_wireframe.png" alt="Wireframe sphere triangle mesh" width="250">&nbsp;&nbsp;&nbsp;<img src="../assets/hw5/gifs/hw5_part4_sphere_model_preparation.gif" alt="Loading the smooth sphere model for Part 4" width="400">
 
-This GIF shows the sphere loaded in the renderer. It is useful for Part 4 because the surface is curved, so the difference between flat shading and per-pixel Phong shading should be easier to see.
+The wireframe view makes the idea clear: even this "smooth" sphere is still only a triangle mesh. This is useful for Part 4 because flat shading can still show the triangle structure, while Phong shading should make the lighting look smoother across the same mesh.
+
+---
+
+### Phong Shading Method
+
+For Phong shading, I added a new render mode called `Phong shading`. I kept the same lighting equation from Part 3, but changed where it is calculated: instead of calculating it once per triangle, I calculate it for every pixel inside the triangle.
+
+Here, `P0`, `P1`, and `P2` are the triangle vertex positions, and `N0`, `N1`, and `N2` are the vertex normals. The main difference from flat shading is that I do not use one face normal for the whole triangle anymore.
+
+For every pixel inside the triangle, I use the barycentric weights again, but now not only for depth. I also use them to get the pixel position and pixel normal:
+
+1. Pixel position: `pixel position = alpha * P0 + beta * P1 + gamma * P2`
+
+2. Pixel normal: `pixel normal = alpha * N0 + beta * N1 + gamma * N2`
+
+3. Normalize the new normal: `pixel normal = normalize(pixel normal)`
+
+4. Calculate the final lighting: `color = ambient + diffuse + specular`
+
+This means the Light and Material controls from the previous parts still work in `Phong shading`. The Z-buffer is still used the same way, so this mode changes the color calculation, not the visibility test. Instead of giving the whole triangle one flat color, nearby pixels can get slightly different normals and lighting values. This is what makes the sphere look smoother in the result.
+
+---
+
+### Flat Shading vs Phong Shading
+
+Both results use the same sphere, camera, and light setup. The only difference is the shading method, so the comparison is fair.
+
+This comparison is the main visual check for Part 4 because it keeps the geometry fixed and changes only the shading calculation.
+
+| Comparison Point | Flat Shading | Phong Shading |
+| --- | --- | --- |
+| Result | <img src="../assets/hw5/images/hw5_part4_flat_shading_sphere.png" alt="Flat shading on sphere" width="250"> | <img src="../assets/hw5/images/hw5_part4_phong_shading_sphere.png" alt="Phong shading on sphere" width="250"> |
+| Lighting calculation | Calculates lighting once per triangle. | Calculates lighting for every pixel. |
+| Normal used | Uses one face normal for the whole triangle. | Interpolates the vertex normals across the triangle. |
+| Pixel color | Every pixel inside the same triangle gets the same color. | Nearby pixels can get slightly different lighting values. |
+| Visual result | The triangle faces are still visible on the sphere. | The lighting changes gradually across the sphere. |
+| Best use | Good when I want to see the triangle structure clearly. | Better when I want a curved surface to look smooth. |
+
+This shows that the geometry did not change. The sphere is still made from triangles, but Phong shading makes the lighting smoother because the normal and lighting are calculated per pixel.
+
+---
+
+### Light Position in Phong Shading
+
+<table>
+  <tr>
+    <td width="35%"><img src="../assets/hw5/gifs/hw5_part4_phong_light_position.gif" alt="Changing light position in Phong shading" width="400"></td>
+    <td>
+      In this example, I kept `Phong shading` active and moved the light position on the Z axis. The light started from one side and moved toward the other side, so the bright area moved smoothly across the sphere.<br><br>
+      This shows that the new per-pixel lighting still responds to the same light controls. It also shows why interpolating both the position and normal matters: each pixel gets its own lighting calculation, so the bright area moves smoothly instead of changing one triangle at a time. This confirms that Part 4 is working because the same triangle mesh now appears smoother through per-pixel lighting.
+    </td>
+  </tr>
+</table>
