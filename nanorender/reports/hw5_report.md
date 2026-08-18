@@ -419,3 +419,25 @@ This shows that the geometry did not change. The sphere is still made from trian
     </td>
   </tr>
 </table>
+
+After this, the lighting pipeline is complete for this assignment.
+
+---
+
+## Final Overview
+
+In this assignment, the renderer started to look more like a real 3D renderer. Before this, the models were filled with colors, but they did not react to light. Here, I added ambient lighting, diffuse lighting, specular highlights, and Phong shading step by step.
+
+The main thing I learned is that the final color is not only the model color. It also depends on the light, the material, the surface normal, and the camera. I also understood why flat shading looks faceted and why Phong shading looks smoother, even when the model is still made from triangles.
+
+I enjoyed this assignment because the changes were easy to see on the screen, and each part made the renderer feel closer to the final mini project.
+
+Since I worked individually on all the assignments, I completed Parts 1-4 and did not do the pair-programming extension.
+
+---
+
+## Rendering Pipeline Overview - Overall Progress
+
+Since this was the last homework before the mini project, it helped me see how the previous assignments connect together. The renderer started with simple UI drawing and line rendering, then moved to transformations, camera control, projection, rasterization, depth buffering, and finally lighting and shading.
+
+Each homework added one part of the rendering pipeline, so reaching this point made the mini project feel more realistic and easier to understand.
