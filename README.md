@@ -1,72 +1,52 @@
-# Computer Graphics 2026 - Course Portfolio
+# NanoRender – A Software 3D Renderer Built from Scratch
 
-**Student Information**
-* **Name:** Hala Ishan
-* **Student ID:** 213692296
+A complete 3D rendering pipeline written in **C++**, built step by step over five assignments in the **Computer Graphics** course at the University of Haifa (2026).
 
-## Academic Integrity & Workflow Agreement
+Instead of relying on a graphics API, every stage is implemented by hand: drawing pixels into a framebuffer, loading 3D models, transforming and projecting them through a virtual camera, rasterizing triangles with a Z-buffer, and finally shading them with real lighting.
 
-By submitting work in this repository, I acknowledge and agree to the following:
+<p align="center">
+  <img src="nanorender/assets/hw5/gifs/hw5_part4_phong_light_position.gif" alt="Phong shading with a moving light" width="45%"/>
+  <img src="nanorender/assets/hw4/gifs/hw4_part3_z_buffer_rotation.gif" alt="Z-buffer rendering" width="45%"/>
+</p>
 
-* **Originality:** I certify that the work, code, and reports submitted are my own. While I may use AI assistance or external resources as permitted by the course guidelines, I am fully responsible for understanding, explaining, and defending every line of code and every claim in my reports.
-* **Commit Frequency:** I understand that an iterative process is essential to this course. I am required to **commit my progress frequently**. A continuous "paper trail" of work is necessary for the teaching staff to verify the development process.
-* **Penalty:** I acknowledge that submitting large amounts of work or entire projects in a single commit (or very few commits) **will be penalized**.
-* **Responsibility:** I am the sole author of the content in this repository. Any plagiarism or failure to properly attribute external sources will be handled according to University of Haifa academic integrity policies.
-* **Git Proficiency & Repository Hygiene:** I understand that managing a clean repository is a core part of the course. I will ensure that **large binary files, build artifacts, and temporary local files** are never committed (utilize the `.gitignore`). I am responsible for maintaining a readable history, using `git commit --amend` or `squash` where appropriate to keep the log professional and concise.
-* **Visual Standards:** I acknowledge that **photos of a computer screen taken with a phone camera are strictly prohibited.** All visual results must be submitted as high-quality, direct screenshots, videos or renders, and integrated into the reports as detailed below. Similarly, images of text (such as screenshots of code or console output) are not allowed; all text must be provided as proper Markdown text for searchability and clarity.
-* **The Report is Paramount:** I understand that while the code is the foundation, **the written report is the primary artifact being evaluated.** It must be clear, concise, and professional. A functioning project with a poor or disorganized report will not receive full credit.
+## The Rendering Pipeline
 
----
+| Stage | What I implemented | Report |
+|---|---|---|
+| **1. Framebuffer & GUI** | Direct pixel drawing, an immediate-mode UI, keyboard input, Bresenham line drawing, and an interactive drawing tool | [HW1](nanorender/reports/hw1_report.md) |
+| **2. Wireframe Viewer** | OBJ model loading, normalization and viewport transform, orthographic projection, and translation / rotation / scale matrices with live controls | [HW2](nanorender/reports/hw2_report.md) |
+| **3. Cameras & Projection** | Coordinate frames and bounding boxes, a virtual camera (view matrix), perspective projection, and face and vertex normals | [HW3](nanorender/reports/hw3_report.md) |
+| **4. Rasterization** | Bounding-box rasterization, triangle filling, and the Z-buffer algorithm for correct visibility | [HW4](nanorender/reports/hw4_report.md) |
+| **5. Lighting & Shading** | Light sources and materials, ambient lighting, flat (diffuse) shading, specular highlights, and per-pixel Phong shading | [HW5](nanorender/reports/hw5_report.md) |
 
-## Getting New Assignments
+Each report documents what was required, how I implemented it, and the visual results, with screenshots and GIFs for every step.
 
-New assignments and updates to the framework will be pushed to the template repository. To fetch the latest materials, ensure you have the template set as an `upstream` remote and pull regularly:
-```bash
-# Add the template as a remote (only needs to be done once)
-git remote add upstream https://github.com/xCraftCourses/cgatuoh26-cg-at-uoh-26-cgvibes-uoh-template
+## Tech Stack
 
-# Pull the latest changes
-git pull upstream main
+- **C++** with **GLM** for vector and matrix math
+- **MiniFB** for the framebuffer window and **MicroUI** for the immediate-mode GUI
+- **CMake** and **Ninja** for building
+
+## Building and Running (Windows)
+
+Requires Visual Studio Build Tools (C++), CMake and Ninja. Full setup instructions are in [`nanorender/README.md`](nanorender/README.md).
+
+```powershell
+cd nanorender
+powershell -ExecutionPolicy Bypass -File .\build_and_run.ps1
+```
+
+## Repository Structure
+
+```
+nanorender/
+├── src/        renderer source code
+├── assets/     3D models, plus the screenshots and GIFs used in the reports
+└── reports/    one detailed report per assignment
+assignments/    the original assignment instructions
 ```
 
 ---
 
-## Assignment Workflow & Reports
-
-Each assignment consists of multiple technical tasks. Your submission must reflect an incremental development process.
-
-### The Development Cycle
-For every task within an assignment, you should follow this sequence:
-1.  **Develop:** Complete the code for the specific task.
-2.  **Document:** Update the corresponding assignment report (`.md` format) with a new section dedicated to that task.
-3.  **Commit:** Perform a Git commit and push. 
-
-**Requirements:**
-*   **Minimum Commit Rule:** There must be **at least one commit per task**. You are encouraged to commit more frequently, and you may update your code after a task is "finished," but the paper trail must show the completion of individual tasks.
-*   **Report Structure:** Each task must have its own clear section in your report detailing your approach and results.
-*   **TOC Maintenance:** While reports can be stored in their respective project folders, you **must** update the Table of Contents in this `README.md` whenever a new report or project is added.
-
----
-
-## Media & Documentation Guidelines
-
-To keep the repository clean and the reports professional, follow these standards for including media:
-
-* **Images (Screenshots/Renders):** 
-    * Store all images in an `assets/` folder within the specific project directory.
-    * Use relative paths in your Markdown: `![Description](./assets/image.png)`.
-    * Use PNG for UI/Screenshots and JPG for high-detail renders to manage file size.
-* **Videos & Demos:**
-    * **Short Clips:** For animations under 5 seconds, use a GIF if the file size remains under 3MB.
-    * **Longer Demos:** Do **not** commit large video files (MP4/MOV) directly to the repository. Instead, drag and drop the video into the GitHub web editor to host it on GitHub's servers, or upload to YouTube/Vimeo and provide a link with a thumbnail.
-* **No "Heavy" Assets:** Never commit raw video footage, massive 4K textures, or uncompressed high-poly meshes unless specifically instructed. Use the `.gitignore` to keep these out of your history.
-
----
-
-## Table of Contents
-| Assignment | Link |
-| :--- | :--- |
-| **Project 1: My First Project** | [View Folder](./MyFirstProject/) |
-
----
-*Note: Please ensure all internal links remain functional as you add new folders.*
+Developed by **Hala Ishan** as part of the Computer Graphics course, University of Haifa.
+See also: [Procedural Material Lab](https://github.com/HalaIshan/procedural_material_lab), my final project for the same course.
