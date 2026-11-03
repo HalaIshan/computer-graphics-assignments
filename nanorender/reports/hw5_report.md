@@ -1,7 +1,6 @@
 # Assignment 5 Report
 
 **Name:** Hala Ishan<br>
-**Student ID:** 213692296
 
 ---
 
