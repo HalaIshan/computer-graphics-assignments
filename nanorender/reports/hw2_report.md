@@ -1,7 +1,6 @@
 # Assignment 2 Report: Wireframe Viewer and Geometric Transformations
 
 **Name:** Hala Ishan  
-**Student ID:** 213692296
 
 ---
 
