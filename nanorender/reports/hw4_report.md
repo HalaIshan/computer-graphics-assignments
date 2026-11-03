@@ -1,7 +1,6 @@
 # Assignment 4 Report
 
 **Name:** Hala Ishan
-**Student ID:** 213692296
 
 ---
 ## Part 1: Bounding Box Rasterization
