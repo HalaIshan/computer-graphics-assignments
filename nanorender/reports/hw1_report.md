@@ -1,7 +1,6 @@
 # Assignment 1 Report: Basic Graphics and Immediate Mode GUI
 
 **Name:** Hala Ishan  
-**Student ID:** 213692296  
 
 ---
 ---
